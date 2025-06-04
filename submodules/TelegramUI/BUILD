@@ -476,6 +476,7 @@ swift_library(
         "//submodules/Components/BlurredBackgroundComponent",
         "//submodules/TelegramUI/Components/CheckComponent",
         "//submodules/TelegramUI/Components/MarqueeComponent",
+        "//submodules/AIAgent",
         "//submodules/TelegramUI/Components/PeerInfo/PostSuggestionsSettingsScreen",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
