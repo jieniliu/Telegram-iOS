@@ -9,7 +9,7 @@ import TelegramCore
 import TelegramPresentationData
 import PresentationDataUtils
 
-/// 单例类：管理小群组（少于50人）的未读消息获取
+/// 单例类：管理小群组（少于50人）和私聊的未读消息获取
 public final class SmallGroupsMessageManager {
     public static let shared = SmallGroupsMessageManager()
     
@@ -47,12 +47,12 @@ public final class SmallGroupsMessageManager {
                 var pendingChecks = 0
                 var completedChecks = 0
                 
-                // 筛选人数少于50人的群组
+                // 筛选人数少于50人的群组和私聊
                 for item in chatList.items {
                     guard let peer = item.renderedPeer.peer else { continue }
                     let peerId: PeerId = peer.id
                     
-                    // 检查是否为群组
+                    // 检查是否为群组或私聊
                     switch peer {
                     case let .legacyGroup(group):
                         // 普通群组，直接检查participantCount
@@ -75,6 +75,9 @@ public final class SmallGroupsMessageManager {
                                 }
                             }
                         }
+                    case .user:
+                        // 私聊，直接添加到列表中
+                        smallGroupIds.append(peerId)
                     default:
                         break
                     }
@@ -117,23 +120,23 @@ public final class SmallGroupsMessageManager {
         self.disposables.append(disposable)
     }
     
-    /// 为指定群组加载最新消息
+    /// 为指定群组和私聊加载最新消息
     private func loadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([MomentEntry]) -> Void) {
         guard let context = self.context else {
             completion([])
             return
         }
         
-        var loadedGroups = 0
-        let totalGroups = groupIds.count
+        var loadedChats = 0
+        let totalChats = groupIds.count
         
-        guard totalGroups > 0 else {
+        guard totalChats > 0 else {
             completion(self.entries)
             return
         }
         
         for groupId in groupIds {
-            // 使用aroundMessageHistoryViewForLocation获取每个群组的最新5条消息
+            // 使用aroundMessageHistoryViewForLocation获取每个群组/私聊的最新5条消息
             let historySignal = context.account.postbox.aroundMessageHistoryViewForLocation(
                 .peer(peerId: groupId, threadId: nil),
                 anchor: .upperBound,
@@ -161,10 +164,10 @@ public final class SmallGroupsMessageManager {
                         strongSelf.entries.append(momentEntry)
                     }
                     
-                    loadedGroups += 1
+                    loadedChats += 1
                     
-                    // 如果所有群组的消息都加载完成
-                    if loadedGroups == totalGroups {
+                    // 如果所有群组/私聊的消息都加载完成
+                    if loadedChats == totalChats {
                         // 按时间戳排序
                         strongSelf.entries.sort { $0.message.timestamp > $1.message.timestamp }
                         completion(strongSelf.entries)
@@ -175,7 +178,7 @@ public final class SmallGroupsMessageManager {
         }
     }
     
-    /// 获取少于50人群组的未读消息
+    /// 获取少于50人群组和私聊的未读消息
     /// - Parameter completion: 完成回调，返回未读消息条目数组
      func getUnreadMessagesForSmallGroups(completion: @escaping ([MomentEntry]) -> Void) {
         guard let context = self.context else {
@@ -197,12 +200,12 @@ public final class SmallGroupsMessageManager {
                 var pendingChecks = 0
                 var completedChecks = 0
                 
-                // 筛选人数少于50人的群组
+                // 筛选人数少于50人的群组和私聊
                 for item in chatList.items {
                     guard let peer = item.renderedPeer.peer else { continue }
                     let peerId: PeerId = peer.id
                     
-                    // 检查是否为群组
+                    // 检查是否为群组或私聊
                     switch peer {
                     case let .legacyGroup(group):
                         // 普通群组，直接检查participantCount
@@ -225,6 +228,9 @@ public final class SmallGroupsMessageManager {
                                 }
                             }
                         }
+                    case .user:
+                        // 私聊，直接添加到列表中
+                        smallGroupIds.append(peerId)
                     default:
                         break
                     }
@@ -239,7 +245,7 @@ public final class SmallGroupsMessageManager {
         self.disposables.append(disposable)
     }
     
-    /// 为指定群组加载未读消息
+    /// 为指定群组和私聊加载未读消息
     private func loadUnreadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([MomentEntry]) -> Void) {
         guard let context = self.context else {
             completion([])
@@ -247,10 +253,10 @@ public final class SmallGroupsMessageManager {
         }
         
         var unreadEntries: [MomentEntry] = []
-        var loadedGroups = 0
-        let totalGroups = groupIds.count
+        var loadedChats = 0
+        let totalChats = groupIds.count
         
-        guard totalGroups > 0 else {
+        guard totalChats > 0 else {
             completion(unreadEntries)
             return
         }
@@ -282,6 +288,8 @@ public final class SmallGroupsMessageManager {
                         }
                     }
                     
+                    print("=== 调试信息 ===\n群组/私聊ID: \(groupId)\n已读最大消息ID: \(readInboxMaxId)\n读取状态: \(readStates?.description ?? "无")\n================")
+                    
                     // 获取该群组的最新消息
                     let historySignal = context.account.postbox.aroundMessageHistoryViewForLocation(
                         .peer(peerId: groupId, threadId: nil),
@@ -303,8 +311,10 @@ public final class SmallGroupsMessageManager {
                         |> deliverOnMainQueue).start(next: { (messageHistoryView, _, _) in
                             
                             // 筛选未读消息（消息ID大于已读最大ID的消息）
+                            print("开始检查消息，总共 \(messageHistoryView.entries.count) 条消息")
                             for entry in messageHistoryView.entries {
                                 let message = entry.message
+                                print("检查消息ID: \(message.id.id), 已读最大ID: \(readInboxMaxId), 是否传入: \(message.flags.contains(.Incoming)), 消息标志: \(message.flags)")
                                 // 检查消息是否未读且是传入消息（不是自己发送的）
                                 if message.id.id > readInboxMaxId && message.flags.contains(.Incoming) {
                                     // 打印消息的详细信息
@@ -325,21 +335,21 @@ public final class SmallGroupsMessageManager {
                                     }
                                     
                                     // 获取群组信息
-                    var groupPeer: Peer?
-                    for additionalData in messageHistoryView.additionalData {
-                        if case let .peer(peerId, peer) = additionalData, peerId == groupId {
-                            groupPeer = peer
-                            break
-                        }
-                    }
-                    
-                    if let peer = groupPeer {
-                        print("群组ID: \(peer.id)")
-                        print("群组名称: \(EnginePeer(peer).displayTitle(strings: context.sharedContext.currentPresentationData.with { $0 }.strings, displayOrder: context.sharedContext.currentPresentationData.with { $0 }.nameDisplayOrder))")
-                    } else {
-                        print("群组ID: \(groupId)")
-                        print("群组名称: 未知")
-                    }
+                                    var groupPeer: Peer?
+                                    for additionalData in messageHistoryView.additionalData {
+                                        if case let .peer(peerId, peer) = additionalData, peerId == groupId {
+                                            groupPeer = peer
+                                            break
+                                        }
+                                    }
+                                    
+                                    if let peer = groupPeer {
+                                        print("群组ID: \(peer.id)")
+                                        print("群组名称: \(EnginePeer(peer).displayTitle(strings: context.sharedContext.currentPresentationData.with { $0 }.strings, displayOrder: context.sharedContext.currentPresentationData.with { $0 }.nameDisplayOrder))")
+                                    } else {
+                                        print("群组ID: \(groupId)")
+                                        print("群组名称: 未知")
+                                    }
                                     
                                     // 获取消息内容
                                     var messageContent = "无内容"
@@ -414,10 +424,10 @@ public final class SmallGroupsMessageManager {
                                 }
                             }
                             
-                            loadedGroups += 1
+                            loadedChats += 1
                             
-                            // 如果所有群组的消息都加载完成
-                            if loadedGroups == totalGroups {
+                            // 如果所有群组/私聊的消息都加载完成
+                            if loadedChats == totalChats {
                                 // 按时间戳排序（最新的在前）
                                 unreadEntries.sort { $0.message.timestamp > $1.message.timestamp }
                                 completion(unreadEntries)
