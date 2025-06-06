@@ -68,6 +68,7 @@ public final class MomentsController: ViewController {
 
     deinit {
         self.messagesDisposable?.dispose()
+        self.cleanupSmallGroupsManager()
     }
 
     private func loadRecentMessages() {
@@ -115,6 +116,7 @@ public final class MomentsController: ViewController {
         self.displayNode.addSubnode(self.listNode)
         self.loadRecentMessages()
         self.loadSmallGroupsMessages()
+        self.getUnreadMessagesForSmallGroups()
     }
 
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -358,151 +360,52 @@ private final class MomentItemNode: ListViewItemNode {
 
 // MARK: - MomentsController Extension
 extension MomentsController {
-    // 公共方法：加载小群组的最新消息
-    public func loadSmallGroupsMessages() {
-        self.loadSmallGroupsRecentMessages()
+    /// 配置小群组消息管理器
+    private func configureSmallGroupsManager() {
+        SmallGroupsMessageManager.shared.configure(with: self.context)
     }
     
-    private func loadRecentMessages1() {
-        let context = self.context
+    /// 公共方法：加载小群组的最新消息
+    public func loadSmallGroupsMessages() {
+        self.configureSmallGroupsManager()
         
-        // 获取最近的聊天记录
-        let recentChatsSignal = context.engine.messages.chatList(group: .root, count: 50)
-        
-        let _ = (recentChatsSignal
-        |> deliverOnMainQueue).start(next: { [weak self] chatList in
+        SmallGroupsMessageManager.shared.loadUnreadMessages { [weak self] momentEntries in
             guard let strongSelf = self else { return }
             
-            // 处理聊天列表
-            for item in chatList.items {
-                if let message = item.messages.first {
-                    let momentEntry = MomentEntry(
-                        message: message._asMessage()
-
-                    )
-                    strongSelf.entries.append(momentEntry)
-                }
-            }
+            // 将获取到的消息添加到当前的entries中
+            strongSelf.entries.append(contentsOf: momentEntries)
             
-            // 按时间戳排序
+            // 重新排序所有条目
             strongSelf.entries.sort { $0.message.timestamp > $1.message.timestamp }
             
-            // 更新显示
-//            strongSelf.updateUI()
-        })
+            // 更新UI
+            // strongSelf.updateUI()
+            print("成功加载了 \(momentEntries.count) 条小群组消息")
+        }
     }
     
-    // 新增方法：获取人数少于50人的所有群的最新消息
-    private func loadSmallGroupsRecentMessages() {
-        let context = self.context
+    /// 获取少于50人群组的未读消息
+    public func getUnreadMessagesForSmallGroups() {
+        self.configureSmallGroupsManager()
         
-        // 获取聊天列表
-        let chatListSignal = context.engine.messages.chatList(group: .root, count: 200)
-        
-        let _ = (chatListSignal
-                 |> deliverOnMainQueue).start(next: { [weak self] chatList in
+        SmallGroupsMessageManager.shared.getUnreadMessagesForSmallGroups { [weak self] unreadEntries in
             guard let strongSelf = self else { return }
             
-            var smallGroupIds: [EnginePeer.Id] = []
+            // 将获取到的未读消息添加到当前的entries中
+            strongSelf.entries.append(contentsOf: unreadEntries)
             
-            // 筛选人数少于50人的群组
-            for item in chatList.items {
-                guard let peer = item.renderedPeer.peer else { continue }
-                let peerId: PeerId = peer.id
-                
-                // 检查是否为群组
-                switch peer {
-                case let .legacyGroup(group):
-                    // 普通群组，直接检查participantCount
-                    if group.participantCount < 50 {
-                        smallGroupIds.append(peerId)
-                    }
-                case let .channel(channel):
-                    // 频道/超级群组，需要检查缓存数据中的成员数量
-                    if case .group = channel.info {
-                        // 这是一个超级群组，需要获取成员数量
-                        strongSelf.checkChannelMemberCount(peerId: peerId) { memberCount in
-                            if memberCount < 50 {
-                                smallGroupIds.append(peerId)
-                                strongSelf.loadMessagesForGroups(groupIds: [peerId])
-                            }
-                        }
-                    }
-                default:
-                    break
-                }
-            }
+            // 重新排序所有条目
+            strongSelf.entries.sort { $0.message.timestamp > $1.message.timestamp }
             
-            // 为普通群组加载消息
-            if !smallGroupIds.isEmpty {
-                strongSelf.loadMessagesForGroups(groupIds: smallGroupIds)
-            }
-        })
-    }
-    
-    // 检查频道/超级群组的成员数量
-    private func checkChannelMemberCount(peerId: EnginePeer.Id, completion: @escaping (Int) -> Void) {
-        let context = self.context
-        
-        let peerViewSignal = context.account.viewTracker.peerView(peerId, updateData: false)
-        
-        let _ = (peerViewSignal
-                 |> take(1)
-                 |> deliverOnMainQueue).start(next: { peerView in
-            var memberCount = 0
+            // 更新UI显示
+//            strongSelf.displayMessages()
             
-            if let cachedData = peerView.cachedData as? CachedChannelData {
-                memberCount = Int(cachedData.participantsSummary.memberCount ?? 0)
-            } else if let cachedData = peerView.cachedData as? CachedGroupData {
-                if let participants = cachedData.participants {
-                    memberCount = participants.participants.count
-                }
-            }
-            
-            completion(memberCount)
-        })
-    }
-    
-    // 为指定群组加载最新消息
-    private func loadMessagesForGroups(groupIds: [EnginePeer.Id]) {
-        let context = self.context
-        
-        for groupId in groupIds {
-            // 使用aroundMessageHistoryViewForLocation获取每个群组的最新5条消息
-            let historySignal = context.account.postbox.aroundMessageHistoryViewForLocation(
-                .peer(peerId: groupId, threadId: nil),
-                anchor: .upperBound,
-                ignoreMessagesInTimestampRange: nil,
-                ignoreMessageIds: Set(),
-                count: 5,
-                fixedCombinedReadStates: nil,
-                topTaggedMessageIdNamespaces: Set(),
-                tag: nil,
-                appendMessagesFromTheSameGroup: false,
-                namespaces: .not(Namespaces.Message.allNonRegular),
-                orderStatistics: []
-            )
-            
-            let _ = (historySignal
-                     |> deliverOnMainQueue).start(next: { [weak self] (messageHistoryView, _, _) in
-                guard let strongSelf = self else { return }
-                
-                // 处理获取到的消息
-                for entry in messageHistoryView.entries {
-                    let momentEntry = MomentEntry(
-                        message: entry.message
-                    )
-                    print("=================\(entry.message.text)")
-                    // 添加到moments列表中
-                    strongSelf.entries.append(momentEntry)
-                }
-                
-                // 按时间戳排序
-                strongSelf.entries.sort { $0.message.timestamp > $1.message.timestamp }
-                
-                // 更新UI
-//                strongSelf.updateUI()
-            })
+            print("成功获取了 \(unreadEntries.count) 条小群组未读消息")
         }
+    }
+    
+    /// 清理小群组消息管理器资源
+    public func cleanupSmallGroupsManager() {
+        SmallGroupsMessageManager.shared.cleanup()
     }
 }
