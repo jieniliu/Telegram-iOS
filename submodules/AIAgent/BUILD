@@ -3,9 +3,15 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 swift_library(
     name = "AIAgent",
     module_name = "AIAgent",
-    srcs = glob([
-		"Sources/**/*.swift",
-    ]),
+    srcs = [
+        "Sources/AIAgent.swift",
+        "Sources/AIAgentController.swift",
+        "Sources/SmallGroupsMessageManager.swift",
+        "Sources/AgentServiceManager.swift",
+        "Sources/AgentNetworkCenter.swift",
+        "Sources/AgentChatHistoryManager.swift",
+        "Sources/SummaryPromptConfig.swift",
+    ],
     copts = [
     ],
     deps = [
@@ -18,6 +24,7 @@ swift_library(
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
+        "//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
     ],
     visibility = [
         "//visibility:public",
