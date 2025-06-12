@@ -10,7 +10,7 @@ public final class AgentServiceManager {
     public static let shared = AgentServiceManager()
     
     private let networkCenter: AgentNetworkCenter
-    private let historyManager: AgentChatHistoryManager
+    public let historyManager: AgentChatHistoryManager
     
     private init() {
         self.networkCenter = AgentNetworkCenter.shared

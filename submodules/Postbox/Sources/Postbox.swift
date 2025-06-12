@@ -3928,12 +3928,15 @@ final class PostboxImpl {
             
             return ActionDisposable { [weak self] in
                 disposable.dispose()
-                if let strongSelf = self {
-                    strongSelf.queue.async {
-                        strongSelf.viewTracker.removeCombinedView(index)
-                    }
-                }
+                self?.viewTracker.removeCombinedView(index)
             }
+        }
+    }
+    
+    public func agentChatView(key: AgentChatViewKey) -> Signal<AgentChatViewPlaceholder, NoError> {
+        return self.combinedView(keys: [PostboxViewKey.agentChat(key)])
+        |> map { views -> AgentChatViewPlaceholder in
+            return views.views[PostboxViewKey.agentChat(key)] as! AgentChatViewPlaceholder
         }
     }
     

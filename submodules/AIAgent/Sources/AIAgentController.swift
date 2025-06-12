@@ -37,7 +37,8 @@ public final class AIAgentController: ViewController {
     private var entries: [MomentEntry] = []
     private var chatHistoryDisposable: Disposable?
     private var chatHistoryData: [AgentChatModel] = []
-
+    private var agentChatViewDisposable: Disposable?
+    private var isCreatingSampleData: Bool = false
 
 
     public init(context: AccountContext) {
@@ -70,7 +71,7 @@ public final class AIAgentController: ViewController {
             }
         }
 
-        self.listNode.backgroundColor = .white
+        self.listNode.backgroundColor = .gray
         self.listNode.verticalScrollIndicatorColor = .black
         self.listNode.verticalScrollIndicatorFollowsOverscroll = true
     }
@@ -82,6 +83,7 @@ public final class AIAgentController: ViewController {
 
     deinit {
         self.messagesDisposable?.dispose()
+        self.agentChatViewDisposable?.dispose()
         self.chatHistoryDisposable?.dispose()
         self.cleanupSmallGroupsManager()
     }
@@ -146,11 +148,39 @@ public final class AIAgentController: ViewController {
             )
         ]
         
-        // 更新聊天历史数据并显示
-        self.chatHistoryData = sampleChats
-        self.displayChatHistoryData()
+        print("AIAgent: 开始保存 \(sampleChats.count) 条示例数据到数据库")
         
-        print("AIAgent: 已创建 \(sampleChats.count) 条示例聊天记录")
+        // 保存示例数据到数据库
+        let group = DispatchGroup()
+        var savedCount = 0
+        
+        for chat in sampleChats {
+            group.enter()
+            AgentServiceManager.shared.historyManager.addChatRecord(chat) { result in
+                defer { group.leave() }
+                switch result {
+                case .success():
+                    savedCount += 1
+                    print("AIAgent: 成功保存示例数据 \(chat.id)")
+                case .failure(let error):
+                    print("AIAgent: 保存示例数据 \(chat.id) 失败: \(error)")
+                }
+            }
+        }
+        
+        // 等待所有保存操作完成后再加载数据
+        group.notify(queue: .main) {
+            print("AIAgent: 示例数据保存完成，成功保存 \(savedCount)/\(sampleChats.count) 条记录")
+            
+            // 重置创建标志
+            self.isCreatingSampleData = false
+            
+            // 延迟一下再重新加载数据，确保数据库操作完成
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                print("AIAgent: 重新加载聊天历史数据")
+                self.loadChatHistoryData()
+            }
+        }
     }
     
     private func showEmptyStateMessage() {
@@ -199,28 +229,52 @@ public final class AIAgentController: ViewController {
 
     public override func loadDisplayNode() {
         self.displayNode = ASDisplayNode()
-        self.displayNode.backgroundColor = UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0) // 浅灰色背景
+        self.displayNode.backgroundColor = UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
+        
+        // 设置列表节点的背景为更明显的颜色用于调试
+        self.listNode.backgroundColor = UIColor.red
+        
+        // 添加listNode到displayNode
         self.displayNode.addSubnode(self.listNode)
         
-        // 设置列表节点的背景
-        self.listNode.backgroundColor = UIColor.clear
+        print("AIAgentController: loadDisplayNode - 显示节点已加载")
+    }
+    
+    public override func viewDidLoad() {
+        super.viewDidLoad()
         
-        // 初始化列表状态 - ListView doesn't have updateOpaqueState method
-        // The opaque state is managed through transaction calls
-        
-        print("AIAgentController: 显示节点加载完成")
+        print("AIAgentController: viewDidLoad - 设置初始布局")
         
         // 触发数据链条逻辑
         self.triggerDataChainLogic()
         
         // 监听聊天历史数据变化
         self.setupChatHistoryMonitoring()
+        
+        // 加载聊天历史数据
+        self.loadChatHistoryData()
+    }
+    
+    public override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        print("AIAgentController: viewDidAppear - 视图已显示")
+        print("AIAgentController: displayNode frame: \(self.displayNode.frame)")
+        print("AIAgentController: listNode frame: \(self.listNode.frame)")
     }
 
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
-        let listNodeFrame = CGRect(origin: .zero, size: layout.size)
-        self.listNode.frame = listNodeFrame
+        
+        print("AIAgentController: containerLayoutUpdated - 布局尺寸: \(layout.size)")
+        print("AIAgentController: containerLayoutUpdated - 设置前listNode frame: \(self.listNode.frame)")
+        
+        // 设置listNode的frame等于layout.size
+        let listFrame = CGRect(origin: .zero, size: layout.size)
+        transition.updateFrame(node: self.listNode, frame: listFrame)
+        
+        print("AIAgentController: containerLayoutUpdated - 设置后listNode frame: \(self.listNode.frame)")
+        
         self.listNode.transaction(
             deleteIndices: [],
             insertIndicesAndItems: [],
@@ -235,7 +289,13 @@ public final class AIAgentController: ViewController {
             ),
             stationaryItemRange: nil,
             updateOpaqueState: nil,
-            completion: { _ in }
+            completion: { _ in 
+                print("AIAgentController: 布局更新完成，重新显示数据")
+                // 布局完成后重新显示数据
+                if !self.chatHistoryData.isEmpty {
+                    self.displayChatHistoryData()
+                }
+            }
         )
     }
     
@@ -291,21 +351,23 @@ public final class AIAgentController: ViewController {
         }
     }
     
-    /// 设置聊天历史数据监听
+    /// 设置聊天历史数据监听 - 使用响应式AgentChatView
     private func setupChatHistoryMonitoring() {
-        print("AIAgentController: 设置聊天历史数据监听")
+        print("AIAgentController: 设置响应式聊天历史数据监听")
         
-        // 定期检查聊天历史数据变化
-        let timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        // 直接使用AgentServiceManager监听数据变化
+        // 注意：AgentChatViewPlaceholder只是占位符，实际数据需要通过AgentServiceManager获取
+        self.loadChatHistoryData()
+        
+        // 保持原有的定时器作为备用机制
+        let timer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            // 每10秒检查一次，作为备用机制
             self?.loadChatHistoryData()
         }
         
-        // 将timer转换为Disposable以便管理
         self.chatHistoryDisposable = ActionDisposable {
             timer.invalidate()
         }
-        
-        // 注意：不在这里立即加载数据，因为已经在配置完成后加载了
     }
     
     /// 加载聊天历史数据
@@ -316,16 +378,28 @@ public final class AIAgentController: ViewController {
                 case .success(let chatHistory):
                     print("AIAgentController: 成功获取聊天历史，共 \(chatHistory.count) 条记录")
                     if chatHistory.isEmpty {
-                        print("AIAgentController: 数据库为空，创建示例数据")
-                        self?.createSampleMessages()
+                        // 检查是否已经在创建示例数据，避免重复创建
+                        if self?.isCreatingSampleData != true {
+                            print("AIAgentController: 数据库为空，创建示例数据")
+                            self?.isCreatingSampleData = true
+                            self?.createSampleMessages()
+                        } else {
+                            print("AIAgentController: 正在创建示例数据，跳过重复创建")
+                        }
                     } else {
+                        self?.isCreatingSampleData = false
                         self?.updateChatHistoryData(chatHistory)
                     }
                 case .failure(let error):
                     print("AIAgentController: 获取聊天历史失败: \(error)")
                     // 如果获取失败，也尝试显示示例数据
-                    print("AIAgentController: 由于获取失败，显示示例数据")
-                    self?.createSampleMessages()
+                    if self?.isCreatingSampleData != true {
+                        print("AIAgentController: 由于获取失败，显示示例数据")
+                        self?.isCreatingSampleData = true
+                        self?.createSampleMessages()
+                    } else {
+                        print("AIAgentController: 正在创建示例数据，跳过重复创建")
+                    }
                 }
             }
         }
@@ -376,6 +450,22 @@ public final class AIAgentController: ViewController {
             ListViewInsertItem(index: $0.0, previousIndex: nil, item: $0.1, directionHint: nil) 
         }
         
+        // 确保listNode有有效的尺寸
+        var listSize = self.listNode.bounds.size
+        if listSize == .zero {
+            // 如果listNode尺寸为零，尝试使用view的尺寸
+            listSize = self.view.bounds.size
+            if listSize == .zero {
+                // 最后的备用尺寸
+                listSize = CGSize(width: 375, height: 667)
+            }
+            // 强制更新listNode的frame
+            self.listNode.frame = CGRect(origin: .zero, size: listSize)
+        }
+        
+        print("AIAgentController: 使用列表尺寸: \(listSize)")
+        print("AIAgentController: 当前listNode frame: \(self.listNode.frame)")
+        
         // 更新列表视图
         self.listNode.transaction(
             deleteIndices: deleteIndices,
@@ -384,7 +474,7 @@ public final class AIAgentController: ViewController {
             options: [.Synchronous, .LowLatency],
             scrollToItem: nil,
             updateSizeAndInsets: ListViewUpdateSizeAndInsets(
-                size: self.listNode.bounds.size,
+                size: listSize,
                 insets: UIEdgeInsets(top: 20.0, left: 0, bottom: 20.0, right: 0),
                 duration: 0,
                 curve: .Default(duration: nil)
@@ -393,6 +483,7 @@ public final class AIAgentController: ViewController {
             updateOpaqueState: items.count,
             completion: { _ in 
                 print("AIAgentController: 列表视图更新完成，当前显示 \(items.count) 个项目")
+                print("AIAgentController: listNode frame: \(self.listNode.frame), bounds: \(self.listNode.bounds)")
             }
         )
     }
@@ -472,10 +563,6 @@ final class ChatHistoryListItemNode: ListViewItemNode {
     }
     
     func asyncLayout() -> (_ item: ChatHistoryListItem, _ params: ListViewItemLayoutParams, _ first: Bool) -> (ListViewItemNodeLayout, () -> Void) {
-        let titleLayout = TextNode.asyncLayout(self.titleNode)
-        let contentLayout = TextNode.asyncLayout(self.contentNode)
-        let timeLayout = TextNode.asyncLayout(self.timeNode)
-        
         return { item, params, first in
             let leftInset: CGFloat = 16.0
             let rightInset: CGFloat = 16.0
@@ -493,16 +580,6 @@ final class ChatHistoryListItemNode: ListViewItemNode {
                     .foregroundColor: UIColor.black
                 ]
             )
-            let (titleSize, titleApply) = titleLayout(TextNodeLayoutArguments(
-                attributedString: titleText,
-                backgroundColor: nil,
-                maximumNumberOfLines: 1,
-                truncationType: .end,
-                constrainedSize: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
-                alignment: .natural,
-                cutout: nil,
-                insets: UIEdgeInsets()
-            ))
             
             // 内容预览
             let previewText = String(item.chatModel.aiResponse.prefix(100)) + (item.chatModel.aiResponse.count > 100 ? "..." : "")
@@ -513,16 +590,6 @@ final class ChatHistoryListItemNode: ListViewItemNode {
                     .foregroundColor: UIColor.darkGray
                 ]
             )
-            let (contentSize, contentApply) = contentLayout(TextNodeLayoutArguments(
-                attributedString: contentText,
-                backgroundColor: nil,
-                maximumNumberOfLines: 3,
-                truncationType: .end,
-                constrainedSize: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
-                alignment: .natural,
-                cutout: nil,
-                insets: UIEdgeInsets()
-            ))
             
             // 时间
             let formatter = DateFormatter()
@@ -535,18 +602,27 @@ final class ChatHistoryListItemNode: ListViewItemNode {
                     .foregroundColor: UIColor.lightGray
                 ]
             )
-            let (timeSize, timeApply) = timeLayout(TextNodeLayoutArguments(
-                attributedString: timeText,
-                backgroundColor: nil,
-                maximumNumberOfLines: 1,
-                truncationType: .end,
-                constrainedSize: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
-                alignment: .natural,
-                cutout: nil,
-                insets: UIEdgeInsets()
-            ))
             
-            let totalHeight = topInset + titleSize.size.height + spacing + contentSize.size.height + spacing + timeSize.size.height + bottomInset
+            // 计算文本尺寸
+            let titleSize = titleText.boundingRect(
+                with: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            ).size
+            
+            let contentSize = contentText.boundingRect(
+                with: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            ).size
+            
+            let timeSize = timeText.boundingRect(
+                with: CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                context: nil
+            ).size
+            
+            let totalHeight = topInset + titleSize.height + spacing + contentSize.height + spacing + timeSize.height + bottomInset
             
             let layout = ListViewItemNodeLayout(
                 contentSize: CGSize(width: params.width, height: totalHeight),
@@ -554,29 +630,42 @@ final class ChatHistoryListItemNode: ListViewItemNode {
             )
             
             return (layout, {
-                let _ = titleApply()
-                let _ = contentApply()
-                let _ = timeApply()
+                // 设置文本内容
+                self.titleNode.attributedText = titleText
+                self.contentNode.attributedText = contentText
+                self.timeNode.attributedText = timeText
                 
+                // 设置节点背景色用于调试
+                self.backgroundColor = UIColor.yellow
+                self.titleNode.backgroundColor = UIColor.cyan
+                self.contentNode.backgroundColor = UIColor.lightGray
+                self.timeNode.backgroundColor = UIColor.orange
+                
+                // 设置节点位置和大小
                 self.titleNode.frame = CGRect(
                     origin: CGPoint(x: leftInset, y: topInset),
-                    size: titleSize.size
+                    size: titleSize
                 )
                 
                 self.contentNode.frame = CGRect(
-                    origin: CGPoint(x: leftInset, y: topInset + titleSize.size.height + spacing),
-                    size: contentSize.size
+                    origin: CGPoint(x: leftInset, y: topInset + titleSize.height + spacing),
+                    size: contentSize
                 )
                 
                 self.timeNode.frame = CGRect(
-                    origin: CGPoint(x: leftInset, y: topInset + titleSize.size.height + spacing + contentSize.size.height + spacing),
-                    size: timeSize.size
+                    origin: CGPoint(x: leftInset, y: topInset + titleSize.height + spacing + contentSize.height + spacing),
+                    size: timeSize
                 )
                 
                 self.separatorNode.frame = CGRect(
                     origin: CGPoint(x: 0, y: totalHeight - 1.0),
                     size: CGSize(width: params.width, height: 1.0)
                 )
+                
+                print("ChatHistoryListItemNode: 应用布局 - 总高度: \(totalHeight), 宽度: \(params.width)")
+                print("ChatHistoryListItemNode: 标题: \(titleText.string)")
+                print("ChatHistoryListItemNode: 内容: \(contentText.string)")
+                print("ChatHistoryListItemNode: 时间: \(timeText.string)")
             })
         }
     }

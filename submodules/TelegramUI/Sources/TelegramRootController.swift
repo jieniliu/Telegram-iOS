@@ -80,6 +80,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
+    private var aiAgentController: AIAgentController?
     
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -209,13 +210,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         controllers.append(chatListController)
         
-        // Add AIAgent tab (as button, not selectable)
-        let aiAgentController = AIAgentController(context: self.context)
+        // Add AIAgent tab (as button, not selectable) - 复用实例
+        if self.aiAgentController == nil {
+            self.aiAgentController = AIAgentController(context: self.context)
+        }
+        let aiAgentController = self.aiAgentController!
         aiAgentController.tabBarItemContextActionType = .none
         // Override tab bar item tap to present as modal instead of selecting
         aiAgentController.tabBarItemTapAction = { [weak self] in
-            guard let strongSelf = self else { return }
-            let aiAgent = AIAgentController(context: strongSelf.context)
+            guard let strongSelf = self, let aiAgent = strongSelf.aiAgentController else { return }
             let navigationController = NavigationController(
                 mode: .single,
                 theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)
@@ -267,13 +270,15 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         controllers.append(self.chatListController!)
         
-        // Add AIAgent tab (as button, not selectable)
-        let aiAgentController = AIAgentController(context: self.context)
+        // Add AIAgent tab (as button, not selectable) - 复用实例
+        if self.aiAgentController == nil {
+            self.aiAgentController = AIAgentController(context: self.context)
+        }
+        let aiAgentController = self.aiAgentController!
         aiAgentController.tabBarItemContextActionType = .none
         // Override tab bar item tap to present as modal instead of selecting
         aiAgentController.tabBarItemTapAction = { [weak self] in
-            guard let strongSelf = self else { return }
-            let aiAgent = AIAgentController(context: strongSelf.context)
+            guard let strongSelf = self, let aiAgent = strongSelf.aiAgentController else { return }
             let navigationController = NavigationController(
                 mode: .single,
                 theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)

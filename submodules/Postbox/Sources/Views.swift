@@ -1,5 +1,52 @@
 import Foundation
 
+// Local definition to avoid circular dependency
+public enum AgentChatViewKey: Hashable {
+    case allChats
+    case chatCount
+    
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .allChats:
+            hasher.combine(0)
+        case .chatCount:
+            hasher.combine(1)
+        }
+    }
+}
+
+// Placeholder implementation to avoid circular dependency
+final class MutableAgentChatView: MutablePostboxView {
+    let viewKey: AgentChatViewKey
+    
+    init(postbox: PostboxImpl, viewKey: AgentChatViewKey) {
+        self.viewKey = viewKey
+    }
+    
+    func replay(postbox: PostboxImpl, transaction: PostboxTransaction) -> Bool {
+        return false
+    }
+    
+    func refreshDueToExternalTransaction(postbox: PostboxImpl) -> Bool {
+        return false
+    }
+    
+    func immutableView() -> PostboxView {
+        return AgentChatViewPlaceholder(self)
+    }
+}
+
+// Placeholder immutable view to avoid circular dependency
+public final class AgentChatViewPlaceholder: PostboxView {
+    public let viewKey: AgentChatViewKey
+    public let chatData: [String] = [] // Placeholder data
+    public let chatCount: Int = 0
+    
+    init(_ mutableView: MutableAgentChatView) {
+        self.viewKey = mutableView.viewKey
+    }
+}
+
 public enum PostboxViewKey: Hashable {
     public struct HistoryView: Equatable {
         public var peerId: PeerId
@@ -101,6 +148,7 @@ public enum PostboxViewKey: Hashable {
     case savedMessagesStats(peerId: PeerId)
     case chatInterfaceState(peerId: PeerId)
     case historyView(HistoryView)
+    case agentChat(AgentChatViewKey)
 
     public func hash(into hasher: inout Hasher) {
         switch self {
@@ -225,6 +273,9 @@ public enum PostboxViewKey: Hashable {
             hasher.combine(20)
             hasher.combine(historyView.peerId)
             hasher.combine(historyView.threadId)
+        case let .agentChat(key):
+            hasher.combine(21)
+            hasher.combine(key)
         }
     }
     
@@ -536,6 +587,12 @@ public enum PostboxViewKey: Hashable {
             } else {
                 return false
             }
+        case let .agentChat(key):
+            if case .agentChat(key) = rhs {
+                return true
+            } else {
+                return false
+            }
         }
     }
 }
@@ -661,5 +718,7 @@ func postboxViewForKey(postbox: PostboxImpl, key: PostboxViewKey) -> MutablePost
             topTaggedMessages: [:],
             additionalDatas: []
         )
+    case let .agentChat(key):
+        return MutableAgentChatView(postbox: postbox, viewKey: key)
     }
 }
