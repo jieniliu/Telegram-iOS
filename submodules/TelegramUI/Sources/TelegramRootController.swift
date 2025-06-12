@@ -28,6 +28,7 @@ import ImageCompression
 import TextFormat
 import MediaEditor
 import PeerInfoScreen
+import AIAgent
 import PeerInfoStoryGridScreen
 import ShareWithPeersScreen
 import ChatEmptyNode
@@ -208,6 +209,22 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
         controllers.append(chatListController)
         
+        // Add AIAgent tab (as button, not selectable)
+        let aiAgentController = AIAgentController(context: self.context)
+        aiAgentController.tabBarItemContextActionType = .none
+        // Override tab bar item tap to present as modal instead of selecting
+        aiAgentController.tabBarItemTapAction = { [weak self] in
+            guard let strongSelf = self else { return }
+            let aiAgent = AIAgentController(context: strongSelf.context)
+            let navigationController = NavigationController(
+                mode: .single,
+                theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)
+            )
+            navigationController.setViewControllers([aiAgent], animated: false)
+            strongSelf.view.window?.rootViewController?.present(navigationController, animated: true, completion: nil)
+        }
+        controllers.append(aiAgentController)
+        
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
             restoreSettignsController = sharedContext.switchingData.settingsController
@@ -227,7 +244,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         accountSettingsController.parentController = self
         controllers.append(accountSettingsController)
                 
-        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
+        // 修复默认选中AIAgent的问题 - 默认选择聊天列表
+        let defaultIndex = showCallsTab ? 2 : 1  // 聊天列表的索引
+        tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : defaultIndex)
         
         self.contactsController = contactsController
         self.callListController = callListController
@@ -247,6 +266,23 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(self.callListController!)
         }
         controllers.append(self.chatListController!)
+        
+        // Add AIAgent tab (as button, not selectable)
+        let aiAgentController = AIAgentController(context: self.context)
+        aiAgentController.tabBarItemContextActionType = .none
+        // Override tab bar item tap to present as modal instead of selecting
+        aiAgentController.tabBarItemTapAction = { [weak self] in
+            guard let strongSelf = self else { return }
+            let aiAgent = AIAgentController(context: strongSelf.context)
+            let navigationController = NavigationController(
+                mode: .single,
+                theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)
+            )
+            navigationController.setViewControllers([aiAgent], animated: false)
+            strongSelf.view.window?.rootViewController?.present(navigationController, animated: true, completion: nil)
+        }
+        controllers.append(aiAgentController)
+        
         controllers.append(self.accountSettingsController!)
         
         rootTabController.setControllers(controllers, selectedIndex: nil)

@@ -50,6 +50,7 @@ swift_library(
     ],
     deps = [
         "//third-party/recaptcha:RecaptchaEnterprise",
+        "//submodules/AIAgent:AIAgent",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",
@@ -477,7 +478,6 @@ swift_library(
         "//submodules/TelegramUI/Components/CheckComponent",
         "//submodules/TelegramUI/Components/MarqueeComponent",
         "//submodules/TelegramUI/Components/PeerInfo/PostSuggestionsSettingsScreen",
-        "//submodules/AIAgent",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

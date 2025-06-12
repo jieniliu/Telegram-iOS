@@ -4329,6 +4329,8 @@ public class Postbox {
 
     public let seedConfiguration: SeedConfiguration
     public let mediaBox: MediaBox
+    public let valueBox: SqliteValueBox
+    public let agentChatTable: ValueBoxTable
     
     private let isInTransaction = Atomic<Bool>(value: false)
 
@@ -4346,6 +4348,8 @@ public class Postbox {
         self.queue = queue
 
         self.seedConfiguration = seedConfiguration
+        self.valueBox = valueBox
+        self.agentChatTable = ValueBoxTable(id: 1000, keyType: .binary, compactValuesOnCreation: false)
 
         postboxLog("MediaBox path: \(basePath + "/media")")
         self.mediaBox = MediaBox(basePath: basePath + "/media", isMainProcess: isMainProcess)

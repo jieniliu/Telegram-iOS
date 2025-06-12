@@ -280,7 +280,10 @@ open class TabBarControllerImpl: ViewController, TabBarController {
                             print("TabBarController: controller took \(readyTime) to become ready")
                         }
                         
-                        if strongSelf.selectedIndex == index {
+                        // Check if controller has custom tap action
+                        if let customTapAction = strongSelf.controllers[index].tabBarItemTapAction {
+                            customTapAction()
+                        } else if strongSelf.selectedIndex == index {
                             if let controller = strongSelf.currentController {
                                 if longTap {
                                     controller.longTapWithTabBar?()
