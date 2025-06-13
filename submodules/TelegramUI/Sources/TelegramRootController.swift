@@ -211,22 +211,27 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controllers.append(chatListController)
         
         // Add AIAgent tab (as button, not selectable) - 复用实例
-        if self.aiAgentController == nil {
-            self.aiAgentController = AIAgentController(context: self.context)
+//        if self.aiAgentController == nil {
+//            self.aiAgentController = AIAgentController(context: self.context)
+//        }
+//        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        
+        // 创建 AI 助手控制器作为正常的 tab
+        let aiAgent = AIAgentController(context: context)
+        // 设置 tab bar item
+        aiAgent.tabBarItem.title = "AI助手"
+        if let image = UIImage(named: "TabAIAgent") {
+            aiAgent.tabBarItem.image = image
+        } else {
+            if #available(iOS 13.0, *) {
+                aiAgent.tabBarItem.image = UIImage(systemName: "brain.head.profile")
+            } else {
+                aiAgent.tabBarItem.image = nil
+            }
         }
-        let aiAgentController = self.aiAgentController!
-        aiAgentController.tabBarItemContextActionType = .none
-        // Override tab bar item tap to present as modal instead of selecting
-        aiAgentController.tabBarItemTapAction = { [weak self] in
-            guard let strongSelf = self, let aiAgent = strongSelf.aiAgentController else { return }
-            let navigationController = NavigationController(
-                mode: .single,
-                theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)
-            )
-            navigationController.setViewControllers([aiAgent], animated: false)
-            strongSelf.view.window?.rootViewController?.present(navigationController, animated: true, completion: nil)
-        }
-        controllers.append(aiAgentController)
+        aiAgent.tabBarItemContextActionType = .none
+        
+        controllers.append(aiAgent)
         
         var restoreSettignsController: (ViewController & SettingsController)?
         if let sharedContext = self.context.sharedContext as? SharedAccountContextImpl {
@@ -248,7 +253,9 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controllers.append(accountSettingsController)
                 
         // 修复默认选中AIAgent的问题 - 默认选择聊天列表
-        let defaultIndex = showCallsTab ? 2 : 1  // 聊天列表的索引
+        // controllers数组顺序：[联系人, 通话(可选), 聊天, AIAgent, 设置]
+        let chatListIndex = showCallsTab ? 2 : 1  // 聊天列表的实际索引
+        let defaultIndex = chatListIndex  // 默认选择聊天列表
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : defaultIndex)
         
         self.contactsController = contactsController
@@ -271,22 +278,21 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         controllers.append(self.chatListController!)
         
         // Add AIAgent tab (as button, not selectable) - 复用实例
-        if self.aiAgentController == nil {
-            self.aiAgentController = AIAgentController(context: self.context)
+        let aiAgent = AIAgentController(context: context)
+        // 设置 tab bar item
+        aiAgent.tabBarItem.title = "AI助手"
+        if let image = UIImage(named: "TabAIAgent") {
+            aiAgent.tabBarItem.image = image
+        } else {
+            if #available(iOS 13.0, *) {
+                aiAgent.tabBarItem.image = UIImage(systemName: "brain.head.profile")
+            } else {
+                aiAgent.tabBarItem.image = nil
+            }
         }
-        let aiAgentController = self.aiAgentController!
-        aiAgentController.tabBarItemContextActionType = .none
-        // Override tab bar item tap to present as modal instead of selecting
-        aiAgentController.tabBarItemTapAction = { [weak self] in
-            guard let strongSelf = self, let aiAgent = strongSelf.aiAgentController else { return }
-            let navigationController = NavigationController(
-                mode: .single,
-                theme: NavigationControllerTheme(presentationTheme: strongSelf.presentationData.theme)
-            )
-            navigationController.setViewControllers([aiAgent], animated: false)
-            strongSelf.view.window?.rootViewController?.present(navigationController, animated: true, completion: nil)
-        }
-        controllers.append(aiAgentController)
+        aiAgent.tabBarItemContextActionType = .none
+        
+        controllers.append(aiAgent)
         
         controllers.append(self.accountSettingsController!)
         

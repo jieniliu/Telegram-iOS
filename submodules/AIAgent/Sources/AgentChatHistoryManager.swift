@@ -150,16 +150,20 @@ final class AgentChatTable: Table {
         let endKey = ValueBoxKey(length: 12)
         endKey.setInt64(0, value: Int64.max) // 最大时间戳
         endKey.setInt32(8, value: Int32.max) // 最大ID
-        
+        var count = 0
         self.valueBox.range(self.table, start: startKey, end: endKey.successor, values: { key, value in
             processedCount += 1
-            print("AgentChatTable: 处理第\(processedCount)条记录 - Key长度: \(key.length), Value长度: \(value.length)")
+            if processedCount == 1 {
+                print("AgentChatTable: 处理第\(processedCount)条记录 - Key长度: \(key.length), Value长度: \(value.length)")
+            }
             
             do {
                 let entry = CodableEntry(data: value.makeData())
                 let model = try JSONDecoder().decode(LegacyAgentChatModel.self, from: entry.data)
                 results.append(model)
-                print("AgentChatTable: 成功解码记录 - ID: \(model.id), 时间戳: \(model.timestamp)")
+                if processedCount == 1 {
+                    print("AgentChatTable: 成功解码记录 - ID: \(model.id), 时间戳: \(model.timestamp)")
+                }
             } catch {
                 errorCount += 1
                 print("AgentChatTable: 解码失败 - 错误: \(error.localizedDescription)")

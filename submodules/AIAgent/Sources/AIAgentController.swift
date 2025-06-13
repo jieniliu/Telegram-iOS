@@ -44,8 +44,9 @@ public final class AIAgentController: ViewController {
     public init(context: AccountContext) {
         self.context = context
         self.listNode = ListView()
-
-        super.init(navigationBarPresentationData: nil)
+        
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData))
 
         // 配置AgentChatHistoryManager - 需要在Postbox队列中执行
         let _ = (context.account.postbox.transaction { transaction -> Void in
@@ -228,23 +229,71 @@ public final class AIAgentController: ViewController {
     }
 
     public override func loadDisplayNode() {
+        // super.loadDisplayNode()
+        // 不要再赋值
         self.displayNode = ASDisplayNode()
         self.displayNode.backgroundColor = UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
         // 设置列表节点的背景为更明显的颜色用于调试
         self.listNode.backgroundColor = UIColor.red
+        self.listNode.view.clipsToBounds = true
         
         // 添加listNode到displayNode
         self.displayNode.addSubnode(self.listNode)
         
+        // 确保listNode有初始frame
+        self.listNode.frame = self.displayNode.bounds
+        
+        
+        // 强制设置displayNode的一些属性
+        self.displayNode.isOpaque = false
+        self.displayNode.alpha = 1.0
+        self.displayNode.isHidden = false
+        self.displayNode.clipsToBounds = false
+        
         print("AIAgentController: loadDisplayNode - 显示节点已加载")
+        print("AIAgentController: loadDisplayNode - displayNode frame: \(self.displayNode.frame)")
+        print("AIAgentController: loadDisplayNode - displayNode backgroundColor: \(self.displayNode.backgroundColor?.description ?? "nil")")
+        print("AIAgentController: loadDisplayNode - displayNode alpha: \(self.displayNode.alpha)")
+        print("AIAgentController: loadDisplayNode - displayNode isHidden: \(self.displayNode.isHidden)")
+        print("AIAgentController: loadDisplayNode - listNode初始frame: \(self.listNode.frame)")
+        
     }
+    
     
     public override func viewDidLoad() {
         super.viewDidLoad()
-        
         print("AIAgentController: viewDidLoad - 设置初始布局")
+        self.view.frame = CGRectMake(0, 0, 393, 852)
+        print("AIAgentController: viewDidLoad - 初始view frame: \(self.view.frame)")
+        print("AIAgentController: viewDidLoad - view backgroundColor: \(self.view.backgroundColor?.description ?? "nil")")
+        print("AIAgentController: viewDidLoad - view alpha: \(self.view.alpha)")
+        print("AIAgentController: viewDidLoad - view isHidden: \(self.view.isHidden)")
+        print("AIAgentController: viewDidLoad - displayNode frame: \(self.displayNode.frame)")
         
+        // 强制设置view的frame，确保有正确的尺寸
+        if self.view.frame.size.width == 0 || self.view.frame.size.height == 0 {
+            let screenSize = UIScreen.main.bounds.size
+            self.view.frame = CGRect(origin: .zero, size: screenSize)
+            print("AIAgentController: viewDidLoad - 强制设置view frame为屏幕尺寸: \(screenSize)")
+        }
+        
+        // 不要再 addSubview 或 addSubnode displayNode
+        // 只需要配置 displayNode 即可
+        
+        // 设置displayNode的frame为整个视图的bounds
+        self.displayNode.frame = self.view.bounds
+        print("AIAgentController: displayNode frame设置为: \(self.displayNode.frame)")
+        
+        // 检查视图层次结构
+        print("AIAgentController: view.subviews count: \(self.view.subviews.count)")
+        print("AIAgentController: view.layer.sublayers count: \(self.view.layer.sublayers?.count ?? 0)")
+        print("AIAgentController: displayNode.subnodes count: \(self.displayNode.subnodes?.count ?? 0)")
+        
+        // 强制设置view的背景色为白色，确保可见
+        self.view.backgroundColor = UIColor.white
+        
+
         // 触发数据链条逻辑
         self.triggerDataChainLogic()
         
@@ -253,14 +302,50 @@ public final class AIAgentController: ViewController {
         
         // 加载聊天历史数据
         self.loadChatHistoryData()
+        
+        print("AIAgentController: viewDidLoad - 最终view frame: \(self.view.frame)")
+        print("AIAgentController: viewDidLoad - 最终displayNode frame: \(self.displayNode.frame)")
     }
     
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
         print("AIAgentController: viewDidAppear - 视图已显示")
+        print("AIAgentController: view frame: \(self.view.frame)")
+        print("AIAgentController: view bounds: \(self.view.bounds)")
         print("AIAgentController: displayNode frame: \(self.displayNode.frame)")
         print("AIAgentController: listNode frame: \(self.listNode.frame)")
+        print("AIAgentController: displayNode subnodes count: \(self.displayNode.subnodes?.count ?? 0)")
+        
+        // 确保displayNode的frame正确设置为view的bounds
+        if !self.view.bounds.equalTo(self.displayNode.frame) {
+            self.displayNode.frame = self.view.bounds
+            print("AIAgentController: viewDidAppear - 重新设置displayNode frame为: \(self.displayNode.frame)")
+        }
+        
+        // 如果view的bounds仍然是零，强制设置一个默认尺寸
+        if self.view.bounds.size.width == 0 || self.view.bounds.size.height == 0 {
+            let defaultSize = CGSize(width: 375, height: 667)
+            self.view.frame = CGRect(origin: .zero, size: defaultSize)
+            self.displayNode.frame = CGRect(origin: .zero, size: defaultSize)
+            print("AIAgentController: viewDidAppear - 强制设置默认尺寸: \(defaultSize)")
+            
+            // 手动触发布局更新
+            let layout = ContainerViewLayout(
+                size: defaultSize,
+                metrics: LayoutMetrics(widthClass: .compact, heightClass: .regular, orientation: .portrait),
+                deviceMetrics: DeviceMetrics.iPhoneX,
+                intrinsicInsets: UIEdgeInsets.zero,
+                safeInsets: UIEdgeInsets(top: 44, left: 0, bottom: 34, right: 0),
+                additionalInsets: UIEdgeInsets.zero,
+                statusBarHeight: 44,
+                inputHeight: nil,
+                inputHeightIsInteractivellyChanging: false,
+                inVoiceOver: false
+            )
+            self.containerLayoutUpdated(layout, transition: .immediate)
+        }
+
     }
 
     public override func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -268,12 +353,64 @@ public final class AIAgentController: ViewController {
         
         print("AIAgentController: containerLayoutUpdated - 布局尺寸: \(layout.size)")
         print("AIAgentController: containerLayoutUpdated - 设置前listNode frame: \(self.listNode.frame)")
+        print("AIAgentController: containerLayoutUpdated - 设置前displayNode frame: \(self.displayNode.frame)")
+        
+        // 确保displayNode的frame正确设置
+        let displayFrame = CGRect(origin: .zero, size: layout.size)
+        transition.updateFrame(node: self.displayNode, frame: displayFrame)
+        print("AIAgentController: containerLayoutUpdated - displayNode frame更新为: \(displayFrame)")
+        
+        // 确保displayNode的可见性属性
+        self.displayNode.isOpaque = false
+        self.displayNode.alpha = 1.0
+        self.displayNode.isHidden = false
+        self.displayNode.clipsToBounds = false
+        
+        print("AIAgentController: displayNode属性 - isOpaque: \(self.displayNode.isOpaque), alpha: \(self.displayNode.alpha), isHidden: \(self.displayNode.isHidden)")
         
         // 设置listNode的frame等于layout.size
         let listFrame = CGRect(origin: .zero, size: layout.size)
         transition.updateFrame(node: self.listNode, frame: listFrame)
         
+        // 更新绿色测试方块位置到屏幕正中间
+        if let testSquare = self.displayNode.subnodes?.last {
+            let centerX = layout.size.width / 2 - 50
+            let centerY = layout.size.height / 2 - 50
+            transition.updateFrame(node: testSquare, frame: CGRect(x: centerX, y: centerY, width: 100, height: 100))
+            print("AIAgentController: 绿色方块位置更新到: (\(centerX), \(centerY))")
+        }
+        
         print("AIAgentController: containerLayoutUpdated - 设置后listNode frame: \(self.listNode.frame)")
+        
+        // 计算正确的insets
+        let topInset = layout.statusBarHeight ?? 20.0
+        let bottomInset = layout.intrinsicInsets.bottom
+        
+        // 强制刷新显示 - 多层级刷新
+        self.displayNode.setNeedsDisplay()
+        self.displayNode.setNeedsLayout()
+        self.listNode.setNeedsDisplay()
+        self.listNode.setNeedsLayout()
+        
+        // 强制刷新所有子节点
+        if let subnodes = self.displayNode.subnodes {
+            for subnode in subnodes {
+                subnode.setNeedsDisplay()
+                subnode.setNeedsLayout()
+            }
+        }
+        
+        self.view.setNeedsDisplay()
+        self.view.setNeedsLayout()
+        self.view.layoutIfNeeded()
+        
+        // 异步再次刷新，确保渲染完成
+        DispatchQueue.main.async {
+            self.displayNode.recursivelyEnsureDisplaySynchronously(true)
+            self.listNode.recursivelyEnsureDisplaySynchronously(true)
+        }
+        
+        print("AIAgentController: 强制刷新显示完成 - 多层级刷新")
         
         self.listNode.transaction(
             deleteIndices: [],
@@ -283,7 +420,7 @@ public final class AIAgentController: ViewController {
             scrollToItem: nil,
             updateSizeAndInsets: ListViewUpdateSizeAndInsets(
                 size: layout.size,
-                insets: UIEdgeInsets(top: layout.statusBarHeight ?? 20.0, left: 0, bottom: layout.intrinsicInsets.bottom, right: 0),
+                insets: UIEdgeInsets(top: topInset, left: 0, bottom: bottomInset, right: 0),
                 duration: 0,
                 curve: .Default(duration: nil)
             ),
@@ -291,9 +428,13 @@ public final class AIAgentController: ViewController {
             updateOpaqueState: nil,
             completion: { _ in 
                 print("AIAgentController: 布局更新完成，重新显示数据")
+                print("AIAgentController: 最终listNode frame: \(self.listNode.frame), bounds: \(self.listNode.bounds)")
                 // 布局完成后重新显示数据
                 if !self.chatHistoryData.isEmpty {
                     self.displayChatHistoryData()
+                } else {
+                    // 如果没有数据，强制加载一次
+                    self.loadChatHistoryData()
                 }
             }
         )
@@ -360,7 +501,7 @@ public final class AIAgentController: ViewController {
         self.loadChatHistoryData()
         
         // 保持原有的定时器作为备用机制
-        let timer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1000.0, repeats: true) { [weak self] _ in
             // 每10秒检查一次，作为备用机制
             self?.loadChatHistoryData()
         }
@@ -411,7 +552,9 @@ public final class AIAgentController: ViewController {
         
         // 打印每条记录的详细信息
         for (index, chat) in newData.enumerated() {
-            print("  记录 \(index + 1): ID=\(chat.id), 用户消息=\(chat.userMessage.prefix(50))..., AI回复=\(chat.aiResponse.prefix(50))...")
+            if index < 10 {
+                print("  记录 \(index + 1): ID=\(chat.id), 用户消息=\(chat.userMessage.prefix(50))..., AI回复=\(chat.aiResponse.prefix(50))...")
+            }
         }
         
         // 检查数据是否有变化
@@ -453,14 +596,19 @@ public final class AIAgentController: ViewController {
         // 确保listNode有有效的尺寸
         var listSize = self.listNode.bounds.size
         if listSize == .zero {
-            // 如果listNode尺寸为零，尝试使用view的尺寸
-            listSize = self.view.bounds.size
+            // 如果listNode尺寸为零，尝试使用displayNode的尺寸
+            listSize = self.displayNode.bounds.size
             if listSize == .zero {
-                // 最后的备用尺寸
-                listSize = CGSize(width: 375, height: 667)
+                // 再尝试使用view的尺寸
+                listSize = self.view.bounds.size
+                if listSize == .zero {
+                    // 最后的备用尺寸
+                    listSize = CGSize(width: 375, height: 667)
+                }
             }
             // 强制更新listNode的frame
             self.listNode.frame = CGRect(origin: .zero, size: listSize)
+            print("AIAgentController: 强制设置listNode frame为: \(self.listNode.frame)")
         }
         
         print("AIAgentController: 使用列表尺寸: \(listSize)")
@@ -483,6 +631,8 @@ public final class AIAgentController: ViewController {
             updateOpaqueState: items.count,
             completion: { _ in 
                 print("AIAgentController: 列表视图更新完成，当前显示 \(items.count) 个项目")
+                print("AIAgentController: view frame: \(self.view.frame), bounds: \(self.view.bounds)")
+                print("AIAgentController: displayNode frame: \(self.displayNode.frame), bounds: \(self.displayNode.bounds)")
                 print("AIAgentController: listNode frame: \(self.listNode.frame), bounds: \(self.listNode.bounds)")
             }
         )
@@ -800,10 +950,11 @@ final class MomentListItem: ListViewItem {
 
 private final class MomentItemNode: ListViewItemNode {
     private let context: AccountContext
-    private let contentNode = ASDisplayNode()
+    private let bubbleBackgroundNode = ASImageNode()
     private let textNode = ASTextNode()
     private let authorNode = ASTextNode()
     private let dateNode = ASTextNode()
+    private var message: Message?
     
     var currentSize: CGSize?
     var currentTransition: ContainedViewLayoutTransition?
@@ -812,22 +963,24 @@ private final class MomentItemNode: ListViewItemNode {
         self.context = context
         super.init(layerBacked: false, dynamicBounce: false)
         
-        // 设置内容节点样式
-        contentNode.backgroundColor = UIColor.white
-        contentNode.cornerRadius = 8.0
-        contentNode.borderWidth = 1.0
-        contentNode.borderColor = UIColor.lightGray.cgColor
+        // 设置气泡背景
+        bubbleBackgroundNode.displaysAsynchronously = false
+        bubbleBackgroundNode.displayWithoutProcessing = true
         
-        self.addSubnode(contentNode)
-        contentNode.addSubnode(authorNode)
-        contentNode.addSubnode(textNode)
-        contentNode.addSubnode(dateNode)
+        self.addSubnode(bubbleBackgroundNode)
+        bubbleBackgroundNode.addSubnode(authorNode)
+        bubbleBackgroundNode.addSubnode(textNode)
+        bubbleBackgroundNode.addSubnode(dateNode)
         
         print("MomentItemNode: 初始化完成")
     }
 
     func setMessage(_ message: Message) {
+        self.message = message
         print("MomentItemNode: 设置消息 - \(message.text)")
+        
+        // 判断是否为发出的消息（简单判断：如果作者是当前用户则为发出消息）
+        let isOutgoing = message.flags.contains(.Incoming) == false
         
         // 设置作者名称
         let authorName: String
@@ -841,16 +994,21 @@ private final class MomentItemNode: ListViewItemNode {
             authorName = "Unknown"
         }
         
+        // 根据消息方向设置文本颜色
+        let textColor = isOutgoing ? UIColor.white : UIColor.black
+        let authorColor = isOutgoing ? UIColor.white.withAlphaComponent(0.8) : UIColor.blue
+        let dateColor = isOutgoing ? UIColor.white.withAlphaComponent(0.7) : UIColor.gray
+        
         authorNode.attributedText = NSAttributedString(string: authorName, attributes: [
             .font: UIFont.boldSystemFont(ofSize: 14),
-            .foregroundColor: UIColor.blue
+            .foregroundColor: authorColor
         ])
         
         // 设置消息文本
         let messageText = message.text.isEmpty ? "[Media Message]" : message.text
         textNode.attributedText = NSAttributedString(string: messageText, attributes: [
             .font: UIFont.systemFont(ofSize: 16),
-            .foregroundColor: UIColor.black
+            .foregroundColor: textColor
         ])
         
         // 设置时间
@@ -861,41 +1019,127 @@ private final class MomentItemNode: ListViewItemNode {
         
         dateNode.attributedText = NSAttributedString(string: formatter.string(from: date), attributes: [
             .font: UIFont.systemFont(ofSize: 12),
-            .foregroundColor: UIColor.gray
+            .foregroundColor: dateColor
         ])
         
-        print("MomentItemNode: 消息设置完成 - 作者: \(authorName), 文本: \(messageText)")
+        // 生成气泡背景图片
+        self.updateBubbleBackground(isOutgoing: isOutgoing)
+        
+        print("MomentItemNode: 消息设置完成 - 作者: \(authorName), 文本: \(messageText), 发出: \(isOutgoing)")
         
         // 强制重新布局
         self.setNeedsLayout()
     }
     
-    override func layout() {
-        super.layout()
-        let padding: CGFloat = 16
-        let margin: CGFloat = 8
-        let bounds = self.bounds
+    private func updateBubbleBackground(isOutgoing: Bool) {
+        // 创建类似Telegram的气泡背景
+        let bubbleColor = isOutgoing ? UIColor.systemBlue : UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1.0)
+        let cornerRadius: CGFloat = 18.0
+        let minCornerRadius: CGFloat = 4.0
         
-        // 给contentNode留出边距
-        contentNode.frame = CGRect(
-            x: margin,
-            y: margin,
-            width: bounds.width - margin * 2,
-            height: bounds.height - margin * 2
+        // 生成气泡背景图片
+        let bubbleImage = self.generateBubbleImage(
+            cornerRadius: cornerRadius,
+            minCornerRadius: minCornerRadius,
+            isOutgoing: isOutgoing,
+            fillColor: bubbleColor
         )
         
-        let maxWidth = contentNode.bounds.width - padding * 2
+        bubbleBackgroundNode.image = bubbleImage
+    }
+    
+    private func generateBubbleImage(cornerRadius: CGFloat, minCornerRadius: CGFloat, isOutgoing: Bool, fillColor: UIColor) -> UIImage {
+        let size = CGSize(width: 60, height: 40)
         
-        let authorSize = authorNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
-        authorNode.frame = CGRect(origin: CGPoint(x: padding, y: padding), size: authorSize)
+        return UIGraphicsImageRenderer(size: size).image { context in
+            let rect = CGRect(origin: .zero, size: size)
+            let cgContext = context.cgContext
+            
+            // 设置填充颜色
+            cgContext.setFillColor(fillColor.cgColor)
+            
+            // 创建圆角矩形路径
+            let path = UIBezierPath(roundedRect: rect.insetBy(dx: 2, dy: 2), cornerRadius: cornerRadius)
+            
+            // 如果是发出的消息，在右下角添加小尾巴
+            if isOutgoing {
+                let tailPath = UIBezierPath()
+                let tailPoint = CGPoint(x: rect.maxX - 2, y: rect.maxY - 8)
+                tailPath.move(to: tailPoint)
+                tailPath.addLine(to: CGPoint(x: rect.maxX + 4, y: rect.maxY - 2))
+                tailPath.addLine(to: CGPoint(x: rect.maxX - 2, y: rect.maxY - 2))
+                tailPath.close()
+                path.append(tailPath)
+            } else {
+                // 如果是接收的消息，在左下角添加小尾巴
+                let tailPath = UIBezierPath()
+                let tailPoint = CGPoint(x: rect.minX + 2, y: rect.maxY - 8)
+                tailPath.move(to: tailPoint)
+                tailPath.addLine(to: CGPoint(x: rect.minX - 4, y: rect.maxY - 2))
+                tailPath.addLine(to: CGPoint(x: rect.minX + 2, y: rect.maxY - 2))
+                tailPath.close()
+                path.append(tailPath)
+            }
+            
+            path.fill()
+        }.resizableImage(withCapInsets: UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20))
+    }
+    
+    override func layout() {
+        super.layout()
+        let padding: CGFloat = 12
+        let horizontalMargin: CGFloat = 16
+        let verticalMargin: CGFloat = 4
+        let bounds = self.bounds
         
-        let textSize = textNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
-        textNode.frame = CGRect(origin: CGPoint(x: padding, y: authorNode.frame.maxY + 8), size: textSize)
+        // 判断是否为发出的消息
+        let isOutgoing = message?.flags.contains(.Incoming) == false
         
-        let dateSize = dateNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
-        dateNode.frame = CGRect(origin: CGPoint(x: padding, y: textNode.frame.maxY + 8), size: dateSize)
+        // 计算内容尺寸
+        let maxContentWidth = bounds.width * 0.75 // 最大宽度为屏幕的75%
+        let maxTextWidth = maxContentWidth - padding * 2
         
-        print("MomentItemNode: 布局完成 - contentNode: \(contentNode.frame)")
+        let authorSize = authorNode.measure(CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude))
+        let textSize = textNode.measure(CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude))
+        let dateSize = dateNode.measure(CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude))
+        
+        // 计算气泡内容的总高度和宽度
+        let contentHeight = authorSize.height + textSize.height + dateSize.height + padding * 2 + 16 // 16为间距
+        let contentWidth = max(max(authorSize.width, textSize.width), dateSize.width) + padding * 2
+        
+        // 根据消息方向设置气泡位置
+        let bubbleX: CGFloat
+        if isOutgoing {
+            bubbleX = bounds.width - contentWidth - horizontalMargin
+        } else {
+            bubbleX = horizontalMargin
+        }
+        
+        // 设置气泡背景框架
+        bubbleBackgroundNode.frame = CGRect(
+            x: bubbleX,
+            y: verticalMargin,
+            width: contentWidth,
+            height: contentHeight
+        )
+        
+        // 在气泡内部布局文本节点
+        authorNode.frame = CGRect(
+            origin: CGPoint(x: padding, y: padding),
+            size: authorSize
+        )
+        
+        textNode.frame = CGRect(
+            origin: CGPoint(x: padding, y: authorNode.frame.maxY + 4),
+            size: textSize
+        )
+        
+        dateNode.frame = CGRect(
+            origin: CGPoint(x: padding, y: textNode.frame.maxY + 4),
+            size: dateSize
+        )
+        
+        print("MomentItemNode: 布局完成 - bubbleFrame: \(bubbleBackgroundNode.frame), isOutgoing: \(isOutgoing)")
     }
     
     override func didLoad() {
@@ -915,7 +1159,6 @@ private final class MomentItemNode: ListViewItemNode {
     
     private func performLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
         self.frame = CGRect(origin: .zero, size: size)
-        self.contentNode.frame = self.bounds
         self.setNeedsLayout()
     }
 }

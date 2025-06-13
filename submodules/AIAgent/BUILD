@@ -6,6 +6,7 @@ swift_library(
     srcs = [
         "Sources/AIAgent.swift",
         "Sources/AIAgentController.swift",
+        "Sources/TestAIAgentController.swift",
         "Sources/SmallGroupsMessageManager.swift",
         "Sources/AgentServiceManager.swift",
         "Sources/AgentNetworkCenter.swift",
@@ -25,6 +26,7 @@ swift_library(
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/TelegramUIPreferences:TelegramUIPreferences",
         "//submodules/UIKitRuntimeUtils:UIKitRuntimeUtils",
+        "//submodules/ItemListUI:ItemListUI",
     ],
     visibility = [
         "//visibility:public",
