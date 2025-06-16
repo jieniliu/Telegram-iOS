@@ -219,7 +219,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         // 创建 AI 助手控制器作为正常的 tab
         let aiAgent = AIAgentController(context: context)
         // 设置 tab bar item
-        aiAgent.tabBarItem.title = "AI助手"
+        aiAgent.tabBarItem.title = "AIAgent"
         if let image = UIImage(named: "TabAIAgent") {
             aiAgent.tabBarItem.image = image
         } else {
@@ -280,7 +280,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         // Add AIAgent tab (as button, not selectable) - 复用实例
         let aiAgent = AIAgentController(context: context)
         // 设置 tab bar item
-        aiAgent.tabBarItem.title = "AI助手"
+        aiAgent.tabBarItem.title = "AIAgent"
         if let image = UIImage(named: "TabAIAgent") {
             aiAgent.tabBarItem.image = image
         } else {

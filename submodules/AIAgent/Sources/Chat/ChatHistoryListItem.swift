@@ -104,7 +104,11 @@ final class ChatHistoryListItem: ListViewItem {
             }
             
             let width = params.width
-            let height: CGFloat = 120.0
+            
+            // 创建临时节点来计算高度
+            let tempNode = ChatHistoryListItemNode()
+            tempNode.setChatModel(strongSelf.chatModel)
+            let height = tempNode.calculateHeight(width: width)
             
             let layout = ListViewItemNodeLayout(
                 contentSize: CGSize(width: width, height: height),

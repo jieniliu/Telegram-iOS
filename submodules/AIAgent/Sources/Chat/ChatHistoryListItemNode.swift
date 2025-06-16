@@ -482,4 +482,24 @@ final class ChatHistoryListItemNode: ListViewItemNode {
         
         return formatted
     }
+    
+    // 添加计算高度的方法
+    func calculateHeight(width: CGFloat) -> CGFloat {
+        let leftInset: CGFloat = 16.0
+        let rightInset: CGFloat = 16.0
+        let topInset: CGFloat = 12.0
+        let bottomInset: CGFloat = 12.0
+        let verticalSpacing: CGFloat = 4.0
+        let bubblePadding: CGFloat = 12.0
+        let maxWidth = width - leftInset - rightInset - bubblePadding * 2
+        
+        let titleSize = titleNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        let contentSize = contentNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        let timeSize = timeNode.measure(CGSize(width: maxWidth, height: .greatestFiniteMagnitude))
+        
+        let totalHeight = topInset + bubblePadding + titleSize.height + verticalSpacing + 
+                         contentSize.height + verticalSpacing + timeSize.height + bubblePadding + bottomInset
+        
+        return totalHeight
+    }
 }
