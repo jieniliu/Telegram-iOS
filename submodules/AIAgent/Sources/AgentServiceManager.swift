@@ -31,7 +31,7 @@ public final class AgentServiceManager {
     private func processChatSummaryWithRetry(retryCount: Int, completion: @escaping (Result<String, Error>) -> Void) {
         // 1. 获取未读消息
         SmallGroupsMessageManager.shared.loadUnreadMessages { [weak self] momentEntries in
-            guard let self = self else {
+            guard let self = self, momentEntries.count > 0 else {
                 completion(.failure(NetworkError.noData as Error))
                 return
             }

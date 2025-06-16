@@ -323,53 +323,319 @@ final class ChatHistoryListItemNode: ListViewItemNode {
     private func formatJSONContent(_ jsonObject: [String: Any]) -> String {
         // 检查是否包含text字段
         if let text = jsonObject["text"] as? String {
-            let formattedText = formatMarkdownText(text)
-            
-            // 移除字符限制，显示完整内容
-            var result = formattedText
-            
-            // 添加其他字段信息
-            var additionalInfo: [String] = []
-            
-            if let mainTopic = jsonObject["main-topic"] as? String, !mainTopic.isEmpty {
-                additionalInfo.append("🎯 \(mainTopic)")
-            }
-            
-            if let pendingMatters = jsonObject["pending-matters"] as? [Any], !pendingMatters.isEmpty {
-                additionalInfo.append("📋 \(pendingMatters.count) pending items")
-            }
-            
-            if !additionalInfo.isEmpty {
-                result += "\n\n" + additionalInfo.joined(separator: " • ")
-            }
-            
-            return result
+            return formatChatSummaryText(text)
         }
         
         return ""
     }
     
-    private func formatJSONObject(_ jsonObject: [String: Any]) -> String {
-        var result = ""
+    private func formatChatSummaryText(_ text: String) -> String {
+        var formatted = text
         
-        for (key, value) in jsonObject {
-            result += "**\(key)**: "
+        // 处理JSON代码块，提取并格式化聊天摘要数据
+        let jsonPattern = "```json[\\s\\S]*?```"
+        if let regex = try? NSRegularExpression(pattern: jsonPattern, options: []) {
+            let range = NSRange(location: 0, length: formatted.utf16.count)
+            let matches = regex.matches(in: formatted, options: [], range: range)
             
+            for match in matches.reversed() {
+                if let matchRange = Range(match.range, in: formatted) {
+                    let matchText = String(formatted[matchRange])
+                    let jsonContent = matchText
+                        .replacingOccurrences(of: "```json\\n?", with: "", options: .regularExpression)
+                        .replacingOccurrences(of: "\\n?```", with: "", options: .regularExpression)
+                    
+                    let formattedSummary = formatSummaryContent(jsonContent)
+                    formatted.replaceSubrange(matchRange, with: formattedSummary)
+                }
+            }
+        }
+        
+        // 处理HTML注释标记 - 只有当内容不为空时才转换为显示格式
+        // 首先检查并移除空的HTML注释块
+        let emptyJsonPattern = "<!-- json-start: [^>]+ -->\\s*\\[\\s*\\]\\s*<!-- json-end -->"
+        formatted = formatted.replacingOccurrences(
+            of: emptyJsonPattern,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 移除孤立的HTML注释标记（没有内容的）
+        formatted = formatted.replacingOccurrences(
+            of: "<!-- json-start: [^>]+ -->\\s*<!-- json-end -->",
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 对于剩余的有内容的HTML注释，转换为显示格式
+        formatted = formatted.replacingOccurrences(
+            of: "<!-- json-start: ([^>]+) -->",
+            with: "\n📊 $1:",
+            options: .regularExpression
+        )
+        
+        formatted = formatted.replacingOccurrences(
+            of: "<!-- json-end -->",
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 处理其他markdown格式
+        formatted = formatMarkdownText(formatted)
+        
+        return formatted.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func formatSummaryContent(_ jsonContent: String) -> String {
+        print("ChatHistoryListItemNode: formatSummaryContent输入内容: \(jsonContent.prefix(200))")
+        
+        // 清理JSON内容，移除HTML注释
+        var cleanedContent = jsonContent
+        
+        // 移除HTML注释标记
+        cleanedContent = cleanedContent.replacingOccurrences(
+            of: "<!-- json-start: [^>]+ -->",
+            with: "",
+            options: .regularExpression
+        )
+        
+        cleanedContent = cleanedContent.replacingOccurrences(
+            of: "<!-- json-end -->",
+            with: "",
+            options: .regularExpression
+        )
+        
+        // 清理多余的空白字符
+        cleanedContent = cleanedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        print("ChatHistoryListItemNode: 清理后的JSON内容: \(cleanedContent.prefix(200))")
+        
+        // 尝试解析JSON内容
+        guard let data = cleanedContent.data(using: .utf8) else {
+            print("ChatHistoryListItemNode: 无法转换为Data")
+            return "📋 聊天摘要数据"
+        }
+        
+        // 尝试解析为JSON数组
+        if let jsonArray = try? JSONSerialization.jsonObject(with: data, options: []) as? [[String: Any]] {
+            print("ChatHistoryListItemNode: 成功解析为JSON数组，包含\(jsonArray.count)个项目")
+            
+            // 验证数组是否包含有意义的内容
+            if !hasValidContent(in: jsonArray) {
+                print("ChatHistoryListItemNode: JSON数组没有有效内容，过滤掉")
+                return ""
+            }
+            
+            return formatJSONArray(jsonArray)
+        }
+        
+        // 尝试解析为单个JSON对象
+        if let jsonObject = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+            print("ChatHistoryListItemNode: 成功解析为JSON对象")
+            
+            // 验证对象是否包含有意义的内容
+            if !hasValidContent(in: jsonObject) {
+                print("ChatHistoryListItemNode: JSON对象没有有效内容，过滤掉")
+                return ""
+            }
+            
+            return formatSingleJSONObject(jsonObject)
+        }
+        
+        print("ChatHistoryListItemNode: JSON解析失败")
+        return "📋 聊天摘要数据"
+    }
+    
+    // 验证JSON数组是否包含有意义的内容
+    private func hasValidContent(in jsonArray: [[String: Any]]) -> Bool {
+        for item in jsonArray {
+            if hasValidContent(in: item) {
+                return true
+            }
+        }
+        return false
+    }
+    
+    // 验证JSON对象是否包含有意义的内容
+    private func hasValidContent(in jsonObject: [String: Any]) -> Bool {
+        for (key, value) in jsonObject {
+            // 检查字符串值是否有意义
             if let stringValue = value as? String {
-                result += formatMarkdownText(stringValue) + "\n\n"
-            } else if let arrayValue = value as? [Any] {
-                result += "\n"
-                for item in arrayValue {
-                    if let dictItem = item as? [String: Any] {
-                        result += formatNestedObject(dictItem, indent: "  ")
-                    } else {
-                        result += "  • \(item)\n"
+                let trimmedValue = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                // 过滤掉空字符串、纯数字ID、或只包含特殊字符的值
+                if !trimmedValue.isEmpty && 
+                   !isOnlyNumericOrSpecialChars(trimmedValue) &&
+                   hasSubstantialContent(trimmedValue) {
+                    return true
+                }
+            }
+            // 检查数组值
+            else if let arrayValue = value as? [Any], !arrayValue.isEmpty {
+                // 检查数组中是否有有意义的内容
+                for arrayItem in arrayValue {
+                    if let dictItem = arrayItem as? [String: Any] {
+                        if hasValidContent(in: dictItem) {
+                            return true
+                        }
+                    } else if let stringItem = arrayItem as? String {
+                        let trimmedItem = stringItem.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmedItem.isEmpty && 
+                           !isOnlyNumericOrSpecialChars(trimmedItem) &&
+                           hasSubstantialContent(trimmedItem) {
+                            return true
+                        }
                     }
                 }
-                result += "\n"
-            } else {
-                result += "\(value)\n\n"
             }
+            // 检查嵌套对象
+            else if let nestedObject = value as? [String: Any] {
+                if hasValidContent(in: nestedObject) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    // 检查字符串是否只包含数字或特殊字符
+    private func isOnlyNumericOrSpecialChars(_ string: String) -> Bool {
+        let pattern = "^[0-9\\-_@#$%^&*()+={}\\[\\]|\\\\:;\"'<>,.?/~`!]*$"
+        return string.range(of: pattern, options: .regularExpression) != nil
+    }
+    
+    // 检查字符串是否包含实质性内容（至少3个字符且包含字母）
+    private func hasSubstantialContent(_ string: String) -> Bool {
+        // 至少3个字符
+        guard string.count >= 3 else { return false }
+        
+        // 必须包含至少一个字母
+        let letterPattern = "[a-zA-Z\\u{4e00}-\\u{9fff}]"
+        return string.range(of: letterPattern, options: .regularExpression) != nil
+    }
+
+    private func formatJSONArray(_ jsonArray: [[String: Any]]) -> String {
+        var result = ""
+        var hasContent = false
+        
+        for (index, item) in jsonArray.enumerated() {
+            var itemContent = ""
+            var itemHasContent = false
+            
+            // 检查是否为主话题格式 (main-topic)
+            if let title = item["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                itemContent += "\n📝 \(title)\n"
+                itemHasContent = true
+                
+                // 处理summaryItems
+                if let summaryItems = item["summaryItems"] as? [[String: Any]] {
+                    for summaryItem in summaryItems {
+                        if let subtitle = summaryItem["subtitle"] as? String, !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            itemContent += "  • \(subtitle)\n"
+                        }
+                    }
+                }
+                
+                // 处理summaryChatIds
+                if let chatIds = item["summaryChatIds"] as? [String], !chatIds.isEmpty {
+                    itemContent += "  💬 相关聊天: \(chatIds.count)个\n"
+                }
+                
+            } else if let chatId = item["chatId"] as? String, !chatId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      let summary = item["summary"] as? String, !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                
+                // 检查是否为垃圾消息格式 (garbage-message)
+                if let level = item["level"] as? String {
+                    let levelIcon = level == "high" ? "🚨" : "⚠️"
+                    let chatTitle = item["chatTitle"] as? String ?? "Unknown Chat"
+                    itemContent += "\n\(levelIcon) 垃圾消息\n"
+                    itemContent += "  📱 \(chatTitle)\n"
+                    itemContent += "  📄 \(summary)\n"
+                    
+                    if let messageIds = item["relevantMessageIds"] as? [Any], !messageIds.isEmpty {
+                        itemContent += "  🔗 相关消息: \(messageIds.count)条\n"
+                    }
+                    
+                } else {
+                    // 待办事项格式 (pending-matters)
+                    let chatTitle = item["chatTitle"] as? String ?? "Unknown Chat"
+                    itemContent += "\n✅ 待办事项\n"
+                    itemContent += "  📱 \(chatTitle)\n"
+                    itemContent += "  📋 \(summary)\n"
+                    
+                    if let messageIds = item["relevantMessageIds"] as? [Any], !messageIds.isEmpty {
+                        itemContent += "  🔗 相关消息: \(messageIds.count)条\n"
+                    }
+                }
+                itemHasContent = true
+                
+            } else {
+                // 处理其他格式的项目
+                var otherContent = ""
+                for (key, value) in item {
+                    if let stringValue = value as? String, !stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        otherContent += "  \(key): \(stringValue)\n"
+                        itemHasContent = true
+                    } else if let arrayValue = value as? [Any], !arrayValue.isEmpty {
+                        otherContent += "  \(key): [\(arrayValue.count) 项]\n"
+                        itemHasContent = true
+                    }
+                }
+                
+                if itemHasContent {
+                    itemContent += "\n📄 项目 \(index + 1)\n"
+                    itemContent += otherContent
+                }
+            }
+            
+            if itemHasContent {
+                result += itemContent
+                hasContent = true
+            } else {
+                print("ChatHistoryListItemNode: 数据没有内容，不展示 - 项目\(index)")
+            }
+        }
+        
+        if !hasContent {
+            print("ChatHistoryListItemNode: 数据没有内容，不展示 - 整个数组为空")
+            return ""
+        }
+        
+        return result
+    }
+    
+    private func formatSingleJSONObject(_ jsonObject: [String: Any]) -> String {
+        var result = ""
+        var hasContent = false
+        
+        for (key, value) in jsonObject {
+            if let stringValue = value as? String, !stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if !hasContent {
+                    result += "\n📋 聊天摘要\n"
+                    hasContent = true
+                }
+                result += "\n**\(key)**: \(stringValue)\n"
+            } else if let arrayValue = value as? [[String: Any]], !arrayValue.isEmpty {
+                var arrayContent = ""
+                for item in arrayValue {
+                    if let title = item["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        arrayContent += "  • \(title)\n"
+                    }
+                }
+                
+                if !arrayContent.isEmpty {
+                    if !hasContent {
+                        result += "\n📋 聊天摘要\n"
+                        hasContent = true
+                    }
+                    result += "\n**\(key)**:\n"
+                    result += arrayContent
+                }
+            }
+        }
+        
+        if !hasContent {
+            print("ChatHistoryListItemNode: 数据没有内容，不展示 - JSON对象为空")
+            return ""
         }
         
         return result

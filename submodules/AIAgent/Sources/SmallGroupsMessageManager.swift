@@ -58,7 +58,7 @@ public final class SmallGroupsMessageManager {
                     switch peer {
                     case let .legacyGroup(group):
                         // 普通群组，直接检查participantCount
-                        if group.participantCount < 50 {
+                        if group.participantCount < 5000 {
                             smallGroupIds.append(peerId)
                         }
                     case let .channel(channel):
@@ -67,7 +67,7 @@ public final class SmallGroupsMessageManager {
                             pendingChecks += 1
                             strongSelf.checkChannelMemberCount(peerId: peerId) { memberCount in
                                 completedChecks += 1
-                                if memberCount < 50 {
+                                if memberCount < 5000 {
                                     smallGroupIds.append(peerId)
                                 }
                                 

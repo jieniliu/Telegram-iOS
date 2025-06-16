@@ -60,7 +60,7 @@ public final class AIAgentController: ViewController {
             }
         }
 
-        self.listNode.backgroundColor = .gray
+//        self.listNode.backgroundColor = .gray
         self.listNode.verticalScrollIndicatorColor = .black
         self.listNode.verticalScrollIndicatorFollowsOverscroll = true
     }
@@ -86,7 +86,7 @@ public final class AIAgentController: ViewController {
         self.displayNode.backgroundColor = UIColor(red: 0.95, green: 0.95, blue: 0.95, alpha: 1.0)
         
         // 设置列表节点的背景为更明显的颜色用于调试
-        self.listNode.backgroundColor = UIColor.red
+//        self.listNode.backgroundColor = UIColor.red
         self.listNode.view.clipsToBounds = true
         
         // 添加listNode到displayNode
@@ -145,7 +145,7 @@ public final class AIAgentController: ViewController {
         self.view.backgroundColor = UIColor.white
         
 
-        // 触发数据链条逻辑
+        // 请求AI总结
         self.triggerDataChainLogic()
         
         // 监听聊天历史数据变化
