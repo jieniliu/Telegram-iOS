@@ -5,13 +5,17 @@ swift_library(
     module_name = "AIAgent",
     srcs = [
         "Sources/AIAgent.swift",
-        "Sources/AIAgentController.swift",
         "Sources/TestAIAgentController.swift",
         "Sources/SmallGroupsMessageManager.swift",
         "Sources/AgentServiceManager.swift",
         "Sources/AgentNetworkCenter.swift",
         "Sources/AgentChatHistoryManager.swift",
         "Sources/SummaryPromptConfig.swift",
+        "Sources/Chat/AIAgentController.swift",
+        "Sources/Chat/AIAgentControllerExtension.swift",
+        "Sources/Chat/ChatHistoryListItem.swift",
+        "Sources/Chat/ChatHistoryListItemNode.swift",
+        # 移除了 MomentEntry.swift, MomentItemNode.swift, MomentListItem.swift - 这些组件已不再使用
     ],
     copts = [
     ],

@@ -15,7 +15,7 @@ public final class SmallGroupsMessageManager {
     
     private var context: AccountContext?
     private var disposables: [Disposable] = []
-    private var entries: [MomentEntry] = []
+    // 移除了 entries: [MomentEntry] 属性，现在直接使用 AgentServiceManager 处理数据
     
     private init() {}
     
@@ -25,16 +25,18 @@ public final class SmallGroupsMessageManager {
         self.context = context
     }
     
-    /// 加载小群组的最新消息
+    /// 加载小群组的最新消息（已废弃，现在使用 AgentServiceManager）
     /// - Parameter completion: 完成回调，返回消息条目数组
-    func loadUnreadMessages(completion: @escaping ([MomentEntry]) -> Void) {
+    func loadUnreadMessages(completion: @escaping ([Any]) -> Void) {
         guard let context = self.context else {
             completion([])
             return
         }
         
-        // 清空之前的条目
-        self.entries.removeAll()
+        // 方法已废弃，直接返回空数组
+        print("SmallGroupsMessageManager.loadUnreadMessages 已废弃，请使用 AgentServiceManager")
+        completion([])
+        return
         
         // 获取聊天列表
         let chatListSignal = context.engine.messages.chatList(group: .root, count: 200)
@@ -121,7 +123,7 @@ public final class SmallGroupsMessageManager {
     }
     
     /// 为指定群组和私聊加载最新消息
-    private func loadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([MomentEntry]) -> Void) {
+    private func loadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([Any]) -> Void) {
         guard let context = self.context else {
             completion([])
             return
@@ -131,7 +133,7 @@ public final class SmallGroupsMessageManager {
         let totalChats = groupIds.count
         
         guard totalChats > 0 else {
-            completion(self.entries)
+            completion([])
             return
         }
         
@@ -158,19 +160,15 @@ public final class SmallGroupsMessageManager {
                     
                     // 处理获取到的消息
                     for entry in messageHistoryView.entries {
-                        let momentEntry = MomentEntry(
-                            message: entry.message
-                        )
-                        strongSelf.entries.append(momentEntry)
+                        // 移除了 MomentEntry 的创建，现在直接使用 AgentServiceManager 处理
                     }
                     
                     loadedChats += 1
                     
                     // 如果所有群组/私聊的消息都加载完成
                     if loadedChats == totalChats {
-                        // 按时间戳排序
-                        strongSelf.entries.sort { $0.message.timestamp > $1.message.timestamp }
-                        completion(strongSelf.entries)
+                        // 方法已废弃，返回空数组
+                        completion([])
                     }
                 })
             
@@ -180,14 +178,17 @@ public final class SmallGroupsMessageManager {
     
     /// 获取少于50人群组和私聊的未读消息
     /// - Parameter completion: 完成回调，返回未读消息条目数组
-     func getUnreadMessagesForSmallGroups(completion: @escaping ([MomentEntry]) -> Void) {
+     func getUnreadMessagesForSmallGroups(completion: @escaping ([Any]) -> Void) {
+        // 方法已废弃，直接返回空数组
+        print("SmallGroupsMessageManager.getUnreadMessagesForSmallGroups 已废弃，请使用 AgentServiceManager")
+        completion([])
+        return
         guard let context = self.context else {
             completion([])
             return
         }
         
-        // 清空之前的条目
-//        var unreadEntries: [MomentEntry] = []
+        // 移除了 unreadEntries: [MomentEntry] 变量
         
         // 获取聊天列表
         let chatListSignal = context.engine.messages.chatList(group: .root, count: 200)
@@ -246,18 +247,22 @@ public final class SmallGroupsMessageManager {
     }
     
     /// 为指定群组和私聊加载未读消息
-    private func loadUnreadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([MomentEntry]) -> Void) {
+    private func loadUnreadMessagesForGroups(groupIds: [EnginePeer.Id], completion: @escaping ([Any]) -> Void) {
+        // 方法已废弃，直接返回空数组
+        print("SmallGroupsMessageManager.loadUnreadMessagesForGroups 已废弃")
+        completion([])
+        return
         guard let context = self.context else {
             completion([])
             return
         }
         
-        var unreadEntries: [MomentEntry] = []
+        // 移除了 unreadEntries: [MomentEntry] 变量
         var loadedChats = 0
         let totalChats = groupIds.count
         
         guard totalChats > 0 else {
-            completion(unreadEntries)
+            completion([])
             return
         }
         
@@ -419,8 +424,7 @@ public final class SmallGroupsMessageManager {
                                     print("===================")
                                     print("")
                                     
-                                    let momentEntry = MomentEntry(message: message)
-                                    unreadEntries.append(momentEntry)
+                                    // 移除了 MomentEntry 的创建和添加操作
                                 }
                             }
                             
@@ -428,9 +432,8 @@ public final class SmallGroupsMessageManager {
                             
                             // 如果所有群组/私聊的消息都加载完成
                             if loadedChats == totalChats {
-                                // 按时间戳排序（最新的在前）
-                                unreadEntries.sort { $0.message.timestamp > $1.message.timestamp }
-                                completion(unreadEntries)
+                                // 方法已废弃，返回空数组
+                                completion([])
                             }
                         })
                     
@@ -447,7 +450,7 @@ public final class SmallGroupsMessageManager {
             disposable.dispose()
         }
         disposables.removeAll()
-        entries.removeAll()
+        // entries 属性已移除
     }
     
     deinit {

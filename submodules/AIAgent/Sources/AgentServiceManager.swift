@@ -175,40 +175,11 @@ public final class AgentServiceManager {
     
     // MARK: - Private Methods
     
-    /// 将MomentEntry数组转换为消息列表JSON字符串
-    private func convertMomentEntriesToMessageList(_ momentEntries: [MomentEntry]) -> [MessageItem] {
-        var messageItems: [MessageItem] = []
-        
-        for entry in momentEntries {
-            let message = entry.message
-            
-            // 获取聊天信息
-            let chatId = String(message.id.peerId.id._internalGetInt64Value())
-            let chatTitle = self.getChatTitle(from: message)
-            let chatType = self.getChatType(from: message)
-            
-            // 获取发送者信息
-            let senderId = String(message.author?.id.id._internalGetInt64Value() ?? 0)
-            let senderName = self.getSenderName(from: message)
-            
-            // 获取消息内容
-            let content = self.getMessageContent(from: message)
-            
-            let messageItem = MessageItem(
-                chatId: chatId,
-                chatTitle: chatTitle,
-                chatType: chatType,
-                senderId: senderId,
-                senderName: senderName,
-                date: Int(message.timestamp),
-                messageId: Int(message.id.id),
-                content: content
-            )
-            
-            messageItems.append(messageItem)
-        }
-        
-        return messageItems
+    /// 将MomentEntry数组转换为消息列表JSON字符串（已废弃）
+    private func convertMomentEntriesToMessageList(_ momentEntries: [Any]) -> [MessageItem] {
+        // 方法已废弃，返回空数组
+        print("convertMomentEntriesToMessageList 已废弃，现在直接使用 SmallGroupsMessageManager 的新逻辑")
+        return []
     }
     
     /// 构建请求内容
