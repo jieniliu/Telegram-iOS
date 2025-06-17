@@ -102,6 +102,15 @@ public final class AIAgentController: ViewController {
         self.displayNode.isHidden = false
         self.displayNode.clipsToBounds = false
         
+        // 请求AI总结
+        self.triggerDataChainLogic()
+        
+        // 监听聊天历史数据变化
+        self.setupChatHistoryMonitoring()
+        
+        // 加载聊天历史数据
+        self.loadChatHistoryData()
+        
         print("AIAgentController: loadDisplayNode - 显示节点已加载")
         print("AIAgentController: loadDisplayNode - displayNode frame: \(self.displayNode.frame)")
         print("AIAgentController: loadDisplayNode - displayNode backgroundColor: \(self.displayNode.backgroundColor?.description ?? "nil")")
@@ -145,14 +154,7 @@ public final class AIAgentController: ViewController {
         self.view.backgroundColor = UIColor.white
         
 
-        // 请求AI总结
-        self.triggerDataChainLogic()
-        
-        // 监听聊天历史数据变化
-        self.setupChatHistoryMonitoring()
-        
-        // 加载聊天历史数据
-        self.loadChatHistoryData()
+
         
         print("AIAgentController: viewDidLoad - 最终view frame: \(self.view.frame)")
         print("AIAgentController: viewDidLoad - 最终displayNode frame: \(self.displayNode.frame)")
@@ -324,6 +326,8 @@ public final class AIAgentController: ViewController {
                             errorMessage = "服务器未返回数据"
                         case .decodingError:
                             errorMessage = "数据解析失败"
+                        case .alreadyProcessed:
+                            errorMessage = "重复请求"
                         }
                     } else {
                         errorMessage = "获取聊天总结失败: \(error.localizedDescription)"

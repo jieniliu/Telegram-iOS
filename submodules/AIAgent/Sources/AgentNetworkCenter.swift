@@ -14,6 +14,7 @@ public enum NetworkError: Error {
     case decodingError
     case networkError(Error)
     case serverError(Int)
+    case alreadyProcessed
     
     public var localizedDescription: String {
         switch self {
@@ -27,6 +28,8 @@ public enum NetworkError: Error {
             return "Network error: \(error.localizedDescription)"
         case .serverError(let code):
             return "Server error with code: \(code)"
+        case .alreadyProcessed:
+            return "Request already processed"
         }
     }
 }

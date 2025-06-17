@@ -11,6 +11,7 @@ public final class AgentServiceManager {
     
     private let networkCenter: AgentNetworkCenter
     public let historyManager: AgentChatHistoryManager
+    private var hasLoadedUnreadMessages = false
     
     private init() {
         self.networkCenter = AgentNetworkCenter.shared
@@ -29,15 +30,21 @@ public final class AgentServiceManager {
     ///   - retryCount: 重试次数
     ///   - completion: 完成回调
     private func processChatSummaryWithRetry(retryCount: Int, completion: @escaping (Result<String, Error>) -> Void) {
+        // 检查是否已经成功调用过loadUnreadMessages
+        guard !hasLoadedUnreadMessages else {
+            completion(.failure(NetworkError.alreadyProcessed as Error))
+            return
+        }
+        
         // 1. 获取未读消息
-        SmallGroupsMessageManager.shared.loadUnreadMessages { [weak self] momentEntries in
-            guard let self = self, momentEntries.count > 0 else {
+        SmallGroupsMessageManager.shared.loadUnreadMessages { [weak self] momentEntries, context in
+            guard let self = self, momentEntries.count > 0, let context = context else {
                 completion(.failure(NetworkError.noData as Error))
                 return
             }
             
             // 2. 转换消息格式
-            let messageList = self.convertMomentEntriesToMessageList(momentEntries)
+            let messageList = self.convertMomentEntriesToMessageList(momentEntries, context: context)
             
             // 3. 构建请求参数
             let requestContent = self.buildRequestContent(with: messageList)
@@ -53,6 +60,10 @@ public final class AgentServiceManager {
             self.networkCenter.sendChatRequestSimple(messages: [chatMessage]) { result in
                 switch result {
                 case .success(let response):
+                    guard !self.hasLoadedUnreadMessages else {
+                        completion(.failure(NetworkError.alreadyProcessed as Error))
+                        return
+                    }
                     // 6. 保存聊天记录
                     let chatModel = AgentChatModel(
                         id: UUID().uuidString,
@@ -70,6 +81,9 @@ public final class AgentServiceManager {
                             print("聊天记录保存失败: \(error)")
                         }
                     }
+                    
+                    // 标记已经成功调用过loadUnreadMessages
+                    self.hasLoadedUnreadMessages = true
                     
                     completion(.success(response))
                     
@@ -175,11 +189,130 @@ public final class AgentServiceManager {
     
     // MARK: - Private Methods
     
-    /// 将MomentEntry数组转换为消息列表JSON字符串（已废弃）
-    private func convertMomentEntriesToMessageList(_ momentEntries: [Any]) -> [MessageItem] {
-        // 方法已废弃，返回空数组
-        print("convertMomentEntriesToMessageList 已废弃，现在直接使用 SmallGroupsMessageManager 的新逻辑")
-        return []
+    /// 将Message数组转换为MessageItem列表
+    private func convertMomentEntriesToMessageList(_ momentEntries: [Any], context: AccountContext) -> [MessageItem] {
+        var messageItems: [MessageItem] = []
+        
+        for entry in momentEntries {
+            // 尝试将 Any 类型转换为 Message 类型
+            guard let message = entry as? Message else {
+                print("无法转换消息类型: \(type(of: entry))")
+                continue
+            }
+            
+            // 获取聊天信息
+            let chatId = String(message.id.peerId.id._internalGetInt64Value())
+            
+            // 获取聊天标题
+            var chatTitle = "群组聊天" // 默认标题
+            var chatType = "group" // 默认类型
+            
+            // 通过postbox获取Peer信息来获取真实的聊天标题
+            let _ = context.account.postbox.transaction { transaction -> Void in
+                if let peer = transaction.getPeer(message.id.peerId) {
+                    chatTitle = peer.debugDisplayTitle
+                    
+                    // 根据Peer类型设置chatType
+                    switch peer {
+                    case is TelegramUser:
+                        chatType = "private"
+                    case is TelegramGroup:
+                        chatType = "group"
+                    case let channel as TelegramChannel:
+                        if case .broadcast = channel.info {
+                            chatType = "channel"
+                        } else {
+                            chatType = "supergroup"
+                        }
+                    default:
+                        chatType = "unknown"
+                    }
+                }
+            }.start()
+            
+            // 获取发送者信息
+            let senderId: String
+            let senderName: String
+            
+            if let author = message.author {
+                senderId = String(author.id.id._internalGetInt64Value())
+                if let user = author as? TelegramUser {
+                    var name = ""
+                    if let firstName = user.firstName {
+                        name += firstName
+                    }
+                    if let lastName = user.lastName {
+                        if !name.isEmpty {
+                            name += " "
+                        }
+                        name += lastName
+                    }
+                    senderName = name.isEmpty ? "未知用户" : name
+                } else {
+                    senderName = "未知用户"
+                }
+            } else {
+                senderId = "0"
+                senderName = "未知用户"
+            }
+            
+            // 获取消息内容
+            var content = message.text
+            
+            // 处理媒体消息
+            for media in message.media {
+                if let image = media as? TelegramMediaImage {
+                    content += content.isEmpty ? "[图片]" : " [图片]"
+                } else if let file = media as? TelegramMediaFile {
+                    if file.isVideo {
+                        content += content.isEmpty ? "[视频]" : " [视频]"
+                    } else if file.isVoice {
+                        content += content.isEmpty ? "[语音]" : " [语音]"
+                    } else if file.isMusic {
+                        content += content.isEmpty ? "[音乐]" : " [音乐]"
+                    } else {
+                        content += content.isEmpty ? "[文件]" : " [文件]"
+                    }
+                } else if let webpage = media as? TelegramMediaWebpage {
+                    if case let .Loaded(webpageContent) = webpage.content, let title = webpageContent.title {
+                        content += content.isEmpty ? "[网页: \(title)]" : " [网页: \(title)]"
+                    } else {
+                        content += content.isEmpty ? "[网页]" : " [网页]"
+                    }
+                } else if media is TelegramMediaContact {
+                    content += content.isEmpty ? "[联系人]" : " [联系人]"
+                } else if media is TelegramMediaMap {
+                    content += content.isEmpty ? "[位置]" : " [位置]"
+                }
+            }
+            
+            // 处理转发消息
+            if message.forwardInfo != nil {
+                content = "[转发] " + content
+            }
+            
+            // 如果内容为空，设置默认内容
+            if content.isEmpty {
+                content = "[消息]"
+            }
+            
+            // 创建 MessageItem
+            let messageItem = MessageItem(
+                chatId: chatId,
+                chatTitle: chatTitle,
+                chatType: chatType,
+                senderId: senderId,
+                senderName: senderName,
+                date: Int(message.timestamp),
+                messageId: Int(message.id.id),
+                content: content
+            )
+            
+            messageItems.append(messageItem)
+        }
+        
+        print("成功转换 \(messageItems.count) 条消息")
+        return messageItems
     }
     
     /// 构建请求内容
